@@ -1,0 +1,5 @@
+*.tlog
+*.filters
+*.stamp
+*.vcxproj
+out/
