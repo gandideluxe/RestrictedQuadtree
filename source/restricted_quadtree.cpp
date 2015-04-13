@@ -33,6 +33,7 @@
 #include <volume_loader_raw.hpp>
 #include <volume_loader_raw_hurrican.hpp>
 #include <transfer_function.hpp>
+#include <QuadtreeRenderer.hpp>
 #include <utils.hpp>
 #include <turntable.hpp>
 #include <imgui.h>
@@ -174,7 +175,7 @@ Cube g_cube;
 std::vector<char*> g_channels_names;
 
 //std::vector<GLuint> g_volume_texture_handles;
-
+QuadtreeRenderer q_renderer;
 std::vector<Transfer_function> g_transfer_fun;
 std::vector<GLuint> g_transfer_texture;
 std::vector<glm::uint64> g_transfer_texture_handles;
