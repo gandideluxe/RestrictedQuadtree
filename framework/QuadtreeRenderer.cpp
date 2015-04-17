@@ -1,5 +1,10 @@
 #include "QuadtreeRenderer.hpp"
 
+
+#include <vector>
+#include <stack>
+#include <algorithm>
+
 #include <iostream>
 #include <fstream>
 #include <GL/glew.h>
@@ -11,7 +16,7 @@
 
 #include "utils.hpp"
 
-const char* vertex_shader = "\
+const char* quad_vertex_shader = "\
 #version 140\n\
 #extension GL_ARB_shading_language_420pack : require\n\
 #extension GL_ARB_explicit_attrib_location : require\n\
@@ -30,7 +35,7 @@ gl_Position = Projection * Modelview * Position;\n\
 }\n\
 ";
 
-const char* fragment_shader = "\
+const char* quad_fragment_shader = "\
 #version 140\n\
 #extension GL_ARB_shading_language_420pack : require\n\
 #extension GL_ARB_explicit_attrib_location : require\n\
@@ -61,12 +66,28 @@ namespace helper {
 } // namespace helper
 
 QuadtreeRenderer::QuadtreeRenderer()
-: m_piecewise_container(),
-m_program_id(0),
+: m_program_id(0),
 m_vao(0),
-m_dirty(true)
+m_dirty(true),
+m_tree()
 {
-    m_program_id = createProgram(vertex_shader, fragment_shader);
+    m_program_id = createProgram(quad_vertex_shader, quad_fragment_shader);
+
+    m_tree.budget = 10;
+    m_tree.budget_filled = 0;
+    m_tree.frame_budget = 1;
+    m_tree.frame_budget_filled = 0;
+    
+    m_tree.root_node = new q_node();
+    m_tree.root_node->root = true;
+    m_tree.root_node->leaf = true;
+    m_tree.root_node->depth = 0;
+    m_tree.root_node->priority = 1.0;
+    m_tree.root_node->error = 0.0;
+        
+    for (unsigned c = 0; c != CHILDREN; ++c){
+        m_tree.root_node->child_node[c] = nullptr;
+    }
 }
 
 void QuadtreeRenderer::add(float data_value, glm::vec4 color)
@@ -77,170 +98,91 @@ void QuadtreeRenderer::add(float data_value, glm::vec4 color)
 void
 QuadtreeRenderer::add(unsigned data_value, glm::vec4 color)
 {
-    helper::clamp(data_value, 0u, 255u);
-    helper::clamp(color.r, 1.0f, 1.0f);
-    helper::clamp(color.g, 1.0f, 1.0f);
-    helper::clamp(color.b, 1.0f, 1.0f);
-    helper::clamp(color.a, 1.0f, 1.0f);
-
-    m_piecewise_container.insert(element_type(data_value, color));
 }
 
-image_data_type QuadtreeRenderer::get_RGBA_Quadtree_Renderer_buffer() const
+void
+QuadtreeRenderer::split_node(QuadtreeRenderer::q_node_ptr n)
 {
-    size_t buffer_size = 255 * 4; // width =255 height = 1 channels = 4 ///TODO: maybe dont hardcode?
-    image_data_type QuadtreeRenderer_buffer;
-    QuadtreeRenderer_buffer.resize(buffer_size);
-
-    unsigned data_value_f = 0u;
-    unsigned data_value_b = 255u;
-    glm::vec4 color_f = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
-    glm::vec4 color_b = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
-
-    unsigned  e_value;
-    glm::vec4 e_color;
-
-    for (auto e : m_piecewise_container) {
-        e_value = e.first;
-        e_color = e.second;
-
-        data_value_b = e_value;
-        color_b = e_color;
-
-        unsigned data_value_d = data_value_b - data_value_f;
-        float step_size = 1.0 / static_cast<float>(data_value_d);
-        float step = 0.0;
-
-        for (unsigned i = data_value_f; i != data_value_b; ++i) {
-
-            QuadtreeRenderer_buffer[i * 4] = static_cast<unsigned char>(helper::weight(step, color_f.r, color_b.r) * 255.0f);
-            QuadtreeRenderer_buffer[i * 4 + 1] = static_cast<unsigned char>(helper::weight(step, color_f.g, color_b.g) * 255.0f);
-            QuadtreeRenderer_buffer[i * 4 + 2] = static_cast<unsigned char>(helper::weight(step, color_f.b, color_b.b) * 255.0f);
-            QuadtreeRenderer_buffer[i * 4 + 3] = static_cast<unsigned char>(helper::weight(step, color_f.a, color_b.a) * 255.0f);
-            step += step_size;
-        }
-
-        data_value_f = data_value_b;
-        color_f = color_b;
+    for (unsigned c = 0; c != CHILDREN; ++c){
+        n->child_node[c] = new q_node();
+        n->child_node[c]->root = false;
+        n->child_node[c]->leaf = true;
+        n->child_node[c]->depth = m_tree.root_node->depth + 1;
+        n->child_node[c]->priority = m_tree.root_node->priority * 0.25;
+        n->child_node[c]->error = m_tree.root_node->error * 0.25;
     }
 
-    // fill TF
-    data_value_b = 255u;
-    color_b = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+    m_tree.budget_filled += CHILDREN;
+    m_tree.frame_budget += 1;
+}
 
-    if (data_value_f != data_value_b) {
-        unsigned data_value_d = data_value_b - data_value_f;
-        float step_size = 1.0 / static_cast<float>(data_value_d);
-        float step = 0.0;
+bool
+QuadtreeRenderer::splitable(QuadtreeRenderer::q_node_ptr n){
+    for (unsigned c = 0; c != CHILDREN; ++c){
+        if (n->child_node[c] != nullptr){
+            return false;
+        }
+    }
+    return true;
+}
 
-        for (unsigned i = data_value_f; i != data_value_b; ++i) {
-            QuadtreeRenderer_buffer[i * 4] = static_cast<unsigned char>(helper::weight(step, color_f.r, color_b.r) * 255.0f);
-            QuadtreeRenderer_buffer[i * 4 + 1] = static_cast<unsigned char>(helper::weight(step, color_f.g, color_b.g) * 255.0f);
-            QuadtreeRenderer_buffer[i * 4 + 2] = static_cast<unsigned char>(helper::weight(step, color_f.b, color_b.b) * 255.0f);
-            QuadtreeRenderer_buffer[i * 4 + 3] = static_cast<unsigned char>(helper::weight(step, color_f.a, color_b.a) * 255.0f);
-            step += step_size;
+bool
+QuadtreeRenderer::collabsible(QuadtreeRenderer::q_node_ptr n){
+    for (unsigned c = 0; c != CHILDREN; ++c){
+        if (n->child_node[c] != nullptr && n->child_node[c]->leaf != true){
+            return false;
+        }
+    }
+    return true;
+
+}
+
+
+void
+QuadtreeRenderer::collapse_node(QuadtreeRenderer::q_node_ptr n)
+{
+    if (n->leaf){
+        for (unsigned c = 0; c != CHILDREN; ++c){
+            delete n->child_node[c];
+
         }
     }
 
-    return QuadtreeRenderer_buffer;
+    m_tree.budget_filled -= CHILDREN;    
 }
 
 void
 QuadtreeRenderer::reset(){
-    m_piecewise_container.clear();
     m_dirty = true;
 }
 
 void
 QuadtreeRenderer::update_vbo(){
 
-    std::vector<QuadtreeRenderer::Vertex> cubeVertices;
+    m_cubeVertices.clear();
+        
+    QuadtreeRenderer::Vertex v_1b;
+    QuadtreeRenderer::Vertex v_2b;
+    QuadtreeRenderer::Vertex v_3b;
+    QuadtreeRenderer::Vertex v_4b;
+    
+    v_1b.position = glm::vec3(0.0, 0.0, 0.0f);
+    v_1b.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-    QuadtreeRenderer::Vertex v_rb;
-    QuadtreeRenderer::Vertex v_gb;
-    QuadtreeRenderer::Vertex v_bb;
-    QuadtreeRenderer::Vertex v_ab;
+    v_2b.position = glm::vec3(1.0f, 0.0f, 0.0f);
+    v_2b.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-    QuadtreeRenderer::Vertex v_re;
-    QuadtreeRenderer::Vertex v_ge;
-    QuadtreeRenderer::Vertex v_be;
-    QuadtreeRenderer::Vertex v_ae;
+    v_3b.position = glm::vec3(1.0f, 1.0f, 0.0f);
+    v_3b.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-    v_rb.position = glm::vec3(0.0, 0.0, 0.0f);
-    v_rb.color = glm::vec3(1.0f, 0.0f, 0.0f);
-    v_rb.position = glm::vec3(0.0, 0.0, 0.0f);
-    v_gb.color = glm::vec3(0.0f, 1.0f, 0.0f);
-    v_rb.position = glm::vec3(0.0, 0.0, 0.0f);
-    v_bb.color = glm::vec3(0.0f, 0.0f, 1.0f);
-    v_rb.position = glm::vec3(0.0, 0.0, 0.0f);
-    v_ab.color = glm::vec3(1.0f, 1.0f, 1.0f);
+    v_4b.position = glm::vec3(0.0f, 1.0f, 0.0f);
+    v_4b.color = glm::vec3(1.0f, 1.0f, 1.0f);
 
-    for (auto e = m_piecewise_container.begin(); e != m_piecewise_container.end(); ++e) {
-
-        v_re.position = glm::vec3((float)e->first / 255.0f, (float)e->second.r, 0.0f);
-        v_re.color = glm::vec3(1.0f, 0.0f, 0.0f);
-        v_ge.position = glm::vec3((float)e->first / 255.0f, e->second.g, 0.0f);
-        v_ge.color = glm::vec3(0.0f, 1.0f, 0.0f);
-        v_be.position = glm::vec3((float)e->first / 255.0f, e->second.b, 0.0f);
-        v_be.color = glm::vec3(0.0f, 0.0f, 1.0f);
-        v_ae.position = glm::vec3((float)e->first / 255.0f, e->second.a, 0.0f);
-        v_ae.color = glm::vec3(0.4f, 0.4f, 0.4f);
-
-        cubeVertices.push_back(v_rb);
-        cubeVertices.push_back(v_re);
-
-        cubeVertices.push_back(v_gb);
-        cubeVertices.push_back(v_ge);
-
-        cubeVertices.push_back(v_bb);
-        cubeVertices.push_back(v_be);
-
-        cubeVertices.push_back(v_ab);
-        cubeVertices.push_back(v_ae);
-
-        v_rb.position = v_re.position;
-        v_rb.color = v_re.color;
-        v_gb.position = v_ge.position;
-        v_gb.color = v_ge.color;
-        v_bb.position = v_be.position;
-        v_bb.color = v_be.color;
-        v_ab.position = v_ae.position;
-        v_ab.color = v_ae.color;
-
-    }
-
-    v_re.position = glm::vec3(1.0, 0.0, 0.0f);
-    v_re.color = glm::vec3(1.0f, 0.0f, 0.0f);
-    v_ge.position = glm::vec3(1.0, 0.0, 0.0f);
-    v_ge.color = glm::vec3(0.0f, 1.0f, 0.0f);
-    v_be.position = glm::vec3(1.0, 0.0, 0.0f);
-    v_be.color = glm::vec3(0.0f, 0.0f, 1.0f);
-    v_ae.position = glm::vec3(1.0, 0.0, 0.0f);
-    v_ae.color = glm::vec3(1.0f, 1.0f, 1.0f);
-
-    if (m_piecewise_container.size() == 0){
-
-        cubeVertices.push_back(v_rb);
-        cubeVertices.push_back(v_re);
-
-        cubeVertices.push_back(v_gb);
-        cubeVertices.push_back(v_ge);
-
-        cubeVertices.push_back(v_bb);
-        cubeVertices.push_back(v_be);
-
-        cubeVertices.push_back(v_ab);
-        cubeVertices.push_back(v_ae);
-    }
-    else{
-        cubeVertices.push_back(v_re);
-
-        cubeVertices.push_back(v_ge);
-
-        cubeVertices.push_back(v_be);
-
-        cubeVertices.push_back(v_ae);
-    }
+    m_cubeVertices.push_back(v_1b);
+    m_cubeVertices.push_back(v_2b);
+    m_cubeVertices.push_back(v_3b);
+    m_cubeVertices.push_back(v_4b);
+    m_cubeVertices.push_back(v_1b);
 
     unsigned int i = 0;
 
@@ -254,8 +196,8 @@ QuadtreeRenderer::update_vbo(){
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float)* 6 * cubeVertices.size()
-        , cubeVertices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float)* 6 * m_cubeVertices.size()
+        , m_cubeVertices.data(), GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
@@ -265,14 +207,51 @@ QuadtreeRenderer::update_vbo(){
 
 }
 
-void QuadtreeRenderer::update_and_draw()
+
+void
+QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
+
+    std::vector<q_node_ptr> split_able_nodes;
+    std::vector<q_node_ptr> coll_able_nodes;
+    
+    std::stack<q_node_ptr> node_stack;
+
+    node_stack.push(m_tree.root_node);
+
+    q_node_ptr current_node;
+
+    while (!node_stack.empty()){
+        current_node = node_stack.top();
+        node_stack.pop();
+
+        if (!current_node->leaf){
+            for (unsigned c = 0; c != CHILDREN; ++c){
+                if (current_node->child_node[c]){
+                    node_stack.push(current_node->child_node[c]);
+                }
+            }
+        }
+        else{
+            split_able_nodes.push_back(current_node);
+        }
+
+        if (collabsible(current_node)){
+            coll_able_nodes.push_back(current_node);
+        }
+    }
+}
+
+void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_dim)
 {
     if (m_dirty){
+        update_tree(screen_pos);
         update_vbo();
         m_dirty = false;
     }
 
-    glm::mat4 projection = glm::ortho(-0.5f, 3.5f, -0.5f, 5.5f);
+    float ratio = (float)screen_dim.x / screen_dim.y;
+
+    glm::mat4 projection = glm::ortho(-0.1f, ratio, -0.1f, 1.1f);
     glm::mat4 view = glm::mat4();
 
     glUseProgram(m_program_id);
@@ -282,10 +261,9 @@ void QuadtreeRenderer::update_and_draw()
         glm::value_ptr(view));
 
     glBindVertexArray(m_vao);
-    glDrawArrays(GL_LINES, 0, m_piecewise_container.size() * 2 * 6);
+    glDrawArrays(GL_LINE_STRIP, 0, m_cubeVertices.size());
     glBindVertexArray(0);
 
     glUseProgram(0);
-
-
+    
 }

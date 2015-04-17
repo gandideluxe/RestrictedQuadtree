@@ -1242,6 +1242,8 @@ int main(int argc, char* argv[])
     g_current_tf = 0;
     g_transfer_dirty = true;
 
+
+    q_renderer.update_vbo();
     ///NOTHING TODO HERE-------------------------------------------------------------------------------
 
     // init and upload volume texture
@@ -1607,8 +1609,8 @@ int main(int argc, char* argv[])
         glShaderStorageBlockBinding(g_volume_program, cwr_block_index, cwr_ssbo_binding_point_index);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, cwr_ssbo_binding_point_index, g_color_write_ssbo);
 
-        if (!g_pause)
-            g_cube.draw();
+        //if (!g_pause)
+        //    g_cube.draw();
 
         glUseProgram(0);
 
@@ -1662,6 +1664,7 @@ int main(int argc, char* argv[])
         if (g_show_transfer_function)
             g_transfer_fun[g_current_tf].draw_texture(g_transfer_function_pos, g_transfer_function_size, g_transfer_texture[g_current_tf]);
 
+        q_renderer.update_and_draw(glm::uvec2(io.DisplaySize.x, io.DisplaySize.y));
 
         glBindTexture(GL_TEXTURE_2D, 0);
         g_win.update();
