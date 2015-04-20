@@ -1664,7 +1664,7 @@ int main(int argc, char* argv[])
         if (g_show_transfer_function)
             g_transfer_fun[g_current_tf].draw_texture(g_transfer_function_pos, g_transfer_function_size, g_transfer_texture[g_current_tf]);
 
-        q_renderer.update_and_draw(glm::uvec2(io.DisplaySize.x, io.DisplaySize.y));
+        q_renderer.update_and_draw(glm::vec2(0.0,0.0), glm::uvec2(io.DisplaySize.x, io.DisplaySize.y));
 
         glBindTexture(GL_TEXTURE_2D, 0);
         g_win.update();
