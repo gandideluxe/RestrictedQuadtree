@@ -59,8 +59,7 @@ public:
         unsigned max_depth;
         unsigned budget;
         unsigned frame_budget;
-        unsigned budget_filled;
-        unsigned frame_budget_filled;
+        unsigned budget_filled;        
         bool strict;
     };
         
@@ -74,8 +73,7 @@ public:
     void reset();
         
     void update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_dim);
-    void update_vbo();
-    void update_tree(glm::vec2 screen_pos);
+
 
     struct greater_prio_ptr : public std::binary_function<QuadtreeRenderer::q_node_ptr,
         QuadtreeRenderer::q_node_ptr, bool>
@@ -102,8 +100,14 @@ private:
     bool splitable(q_node_ptr n);
     bool collabsible(q_node_ptr n);
 
+    void update_vbo(glm::vec2 screen_pos);
+    void update_tree(glm::vec2 screen_pos);
+    void update_priorits(qtree& m_tree, glm::vec2 pos);
+
     unsigned int      m_program_id;
     unsigned int      m_vao;
+    
+    unsigned int      m_vao_p;
 
     qtree m_tree;
 

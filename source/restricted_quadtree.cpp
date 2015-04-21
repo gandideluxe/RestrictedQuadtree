@@ -228,6 +228,8 @@ bool g_time_pause;
 
 int g_bilinear_interpolation = true;
 
+glm::vec2 g_ref_point = glm::vec2(0.5f, 0.5f);
+
 struct Manipulator
 {
     Manipulator()
@@ -253,6 +255,9 @@ struct Manipulator
             m_turntable.rotate(m_lastMouse, m_mouse);
             m_slideMouse = m_mouse;
             m_slidelastMouse = m_lastMouse;
+
+            g_ref_point = g_win.mousePosition();
+
         }
         else {
             m_mouse_button_pressed[0] = 0;
@@ -1243,7 +1248,7 @@ int main(int argc, char* argv[])
     g_transfer_dirty = true;
 
 
-    q_renderer.update_vbo();
+    //q_renderer.update_vbo();
     ///NOTHING TODO HERE-------------------------------------------------------------------------------
 
     // init and upload volume texture
@@ -1652,7 +1657,6 @@ int main(int argc, char* argv[])
             std::cout << "OpenGL Error 1566: " << error << std::endl;
         }
 
-
         glfwPollEvents();
         UpdateImGui();
         showGUI();
@@ -1661,11 +1665,12 @@ int main(int argc, char* argv[])
         glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
         ImGui::Render();
         //IMGUI ROUTINE end        
+        
+        q_renderer.update_and_draw(g_ref_point, glm::uvec2(io.DisplaySize.x, io.DisplaySize.y));
+        
         if (g_show_transfer_function)
             g_transfer_fun[g_current_tf].draw_texture(g_transfer_function_pos, g_transfer_function_size, g_transfer_texture[g_current_tf]);
-
-        q_renderer.update_and_draw(glm::vec2(0.0,0.0), glm::uvec2(io.DisplaySize.x, io.DisplaySize.y));
-
+        
         glBindTexture(GL_TEXTURE_2D, 0);
         g_win.update();
 

@@ -1,8 +1,5 @@
 #include "QuadtreeRenderer.hpp"
 
-
-
-
 #include <iostream>
 #include <fstream>
 #include <GL/glew.h>
@@ -10,6 +7,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+
 
 #include "utils.hpp"
 
@@ -70,11 +68,10 @@ m_tree()
 {
     m_program_id = createProgram(quad_vertex_shader, quad_fragment_shader);
 
-    m_tree.budget = 10;
+    m_tree.budget = 5000;
     m_tree.budget_filled = 0;
-    m_tree.frame_budget = 1;
-    m_tree.frame_budget_filled = 0;
-    m_tree.max_depth = 1;
+    m_tree.frame_budget = 1;    
+    m_tree.max_depth = 10;
     
     m_tree.root_node = new q_node();
     m_tree.root_node->node_id = 0;
@@ -108,15 +105,12 @@ QuadtreeRenderer::split_node(QuadtreeRenderer::q_node_ptr n)
         n->child_node[c]->node_id = q_layout.child_node_index(n->node_id, c);
         n->child_node[c]->root = false;
         n->child_node[c]->leaf = true;
-        n->child_node[c]->depth = m_tree.root_node->depth + 1;
-        n->child_node[c]->priority = m_tree.root_node->priority * 0.25;
-        n->child_node[c]->error = m_tree.root_node->error * 0.25;
+        n->child_node[c]->depth = n->depth + 1;
+        n->child_node[c]->priority = n->priority * 0.25;
+        n->child_node[c]->error = n->error * 0.25;
     }
 
     n->leaf = false;
-
-    m_tree.budget_filled += CHILDREN;
-    m_tree.frame_budget += 1;
 }
 
 bool
@@ -159,6 +153,61 @@ QuadtreeRenderer::collapse_node(QuadtreeRenderer::q_node_ptr n)
     m_tree.budget_filled -= CHILDREN;    
 }
 
+void
+QuadtreeRenderer::update_priorits(qtree& tree, glm::vec2 screen_pos){
+
+    std::stack<q_node_ptr> node_stack;
+
+    node_stack.push(m_tree.root_node);
+
+    q_node_ptr current_node;
+
+    std::vector<q_node_ptr> leafs;
+
+    while (!node_stack.empty()){
+        current_node = node_stack.top();
+        node_stack.pop();
+
+        if (!current_node->leaf){
+            for (unsigned c = 0; c != CHILDREN; ++c){
+                if (current_node->child_node[c]){
+                    node_stack.push(current_node->child_node[c]);
+                }
+            }
+        }
+        else{
+            leafs.push_back(current_node);
+        }
+    }
+
+    
+
+    for (auto l = leafs.begin(); l != leafs.end(); ++l){
+        
+        auto pos = q_layout.node_position((*l)->node_id);
+        auto node_level = q_layout.level_index((*l)->node_id);
+        auto total_node_index = q_layout.total_node_count(node_level);
+
+        auto max_pos = q_layout.node_position(total_node_index - 1);
+
+        //std::cout << "NodeId: " << (*l)->node_id << " px: " << (float)pos.x / (max_pos.x + 1.0) << " py: " << (float)pos.y / (max_pos.y + 1.0) << " level: " << q_layout.level_index((*l)->node_id) << std::endl;
+
+        auto v_pos = glm::vec2((float)pos.x / (max_pos.x + 1.0), (float)pos.y / (max_pos.y + 1.0));
+        auto v_length = 1.0 / (max_pos.x + 1);
+
+        auto ref_pos = glm::vec2(v_pos.x + v_length * 0.5f, v_pos.y + v_length * 0.5f);
+        
+        auto distance = 1.0f/glm::length(ref_pos - screen_pos);
+
+        auto depth = (*l)->depth;
+
+        auto prio = distance / glm::pow((float)depth, 2.0f);
+
+        (*l)->priority = prio;
+
+    }
+
+}
 
 void
 QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
@@ -171,6 +220,8 @@ QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
     node_stack.push(m_tree.root_node);
 
     q_node_ptr current_node;
+
+    update_priorits(m_tree, screen_pos);
 
     while (!node_stack.empty()){
         current_node = node_stack.top();
@@ -192,13 +243,13 @@ QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
             coll_able_nodes.push_back(current_node);
         }
     }
-
+        
         
     std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> split_able_nodes_pq(split_able_nodes.begin(), split_able_nodes.end());
     std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, greater_prio_ptr> coll_able_nodes_pq(coll_able_nodes.begin(), coll_able_nodes.end());
 
     unsigned current_budget = 0;
-
+        
     while (!split_able_nodes_pq.empty()
         && current_budget < m_tree.frame_budget 
         && m_tree.budget_filled < m_tree.budget){
@@ -208,7 +259,7 @@ QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
 
         split_node(q_split_node);
 
-        current_budget += CHILDREN;
+        ++current_budget;
         m_tree.budget_filled += CHILDREN;
     }
 }
@@ -219,7 +270,7 @@ QuadtreeRenderer::reset(){
 }
 
 void
-QuadtreeRenderer::update_vbo(){
+QuadtreeRenderer::update_vbo(glm::vec2 screen_pos){
 
     std::stack<q_node_ptr> node_stack;
 
@@ -246,8 +297,11 @@ QuadtreeRenderer::update_vbo(){
     }
 
     m_cubeVertices.clear();
-
+    std::cout << std::endl;
+    unsigned counter = 0u;
+#if 1
     for (auto l = leafs.begin(); l != leafs.end(); ++l){
+        ++counter;
 
         auto pos = q_layout.node_position((*l)->node_id);
         auto node_level = q_layout.level_index((*l)->node_id);
@@ -255,10 +309,10 @@ QuadtreeRenderer::update_vbo(){
                 
         auto max_pos = q_layout.node_position(total_node_index - 1);
         
-        std::cout << "NodeId: " << (*l)->node_id << " px: " << (float)pos.x / (max_pos.x + 1.0) << " py: " << (float)pos.y / (max_pos.y + 1.0) << " level: " << q_layout.level_index((*l)->node_id) << std::endl;
+        //std::cout << "NodeId: " << (*l)->node_id << " px: " << (float)pos.x / (max_pos.x + 1.0) << " py: " << (float)pos.y / (max_pos.y + 1.0) << " level: " << q_layout.level_index((*l)->node_id) << std::endl;
 
         auto v_pos = glm::vec2((float)pos.x / (max_pos.x + 1.0), (float)pos.y / (max_pos.y + 1.0));
-        auto v_length = 1.0 / max_pos.x;
+        auto v_length = 1.0 / (max_pos.x + 1);
 
         QuadtreeRenderer::Vertex v_1b;
         QuadtreeRenderer::Vertex v_2b;
@@ -279,10 +333,68 @@ QuadtreeRenderer::update_vbo(){
 
         m_cubeVertices.push_back(v_1b);
         m_cubeVertices.push_back(v_2b);
+
+        m_cubeVertices.push_back(v_2b);
         m_cubeVertices.push_back(v_3b);
+
+        m_cubeVertices.push_back(v_3b);
+        m_cubeVertices.push_back(v_4b);
+
         m_cubeVertices.push_back(v_4b);
         m_cubeVertices.push_back(v_1b);
     }
+
+#else
+
+    QuadtreeRenderer::Vertex v_1b;
+    QuadtreeRenderer::Vertex v_2b;
+    QuadtreeRenderer::Vertex v_3b;
+    QuadtreeRenderer::Vertex v_4b;
+
+    v_1b.position = glm::vec3(0.0, 0.0, 0.0f);
+    v_1b.color = glm::vec3(1.0f, 1.0f, 1.0f);
+
+    v_2b.position = glm::vec3(1.0, 0.0, 0.0f);
+    v_2b.color = glm::vec3(1.0f, 1.0f, 1.0f);
+
+    v_3b.position = glm::vec3(1.0, 1.0, 0.0f);
+    v_3b.color = glm::vec3(1.0f, 1.0f, 1.0f);
+
+    v_4b.position = glm::vec3(0.0, 1.0, 0.0f);
+    v_4b.color = glm::vec3(1.0f, 1.0f, 1.0f);
+
+    m_cubeVertices.push_back(v_1b);
+    m_cubeVertices.push_back(v_2b);
+
+    m_cubeVertices.push_back(v_2b);
+    m_cubeVertices.push_back(v_3b);
+
+    m_cubeVertices.push_back(v_3b);
+    m_cubeVertices.push_back(v_4b);
+
+    m_cubeVertices.push_back(v_4b);
+    m_cubeVertices.push_back(v_1b);
+
+
+#endif
+
+    QuadtreeRenderer::Vertex v_1b;
+    QuadtreeRenderer::Vertex v_2b;
+    QuadtreeRenderer::Vertex v_3b;
+
+    v_1b.position = glm::vec3(screen_pos.x, screen_pos.y + 0.01f, 0.0f);
+    v_1b.color = glm::vec3(1.0f, 0.0f, 0.0f);
+
+    v_2b.position = glm::vec3(screen_pos.x - 0.01f, screen_pos.y - 0.01f, 0.0f);
+    v_2b.color = glm::vec3(1.0f, 0.0f, 0.0f);
+
+    v_3b.position = glm::vec3(screen_pos.x + 0.01f, screen_pos.y - 0.01f, 0.0f);
+    v_3b.color = glm::vec3(1.0f, 0.0f, 0.0f);
+    
+    std::vector<QuadtreeRenderer::Vertex> pVertices;
+    pVertices.push_back(v_1b);
+    pVertices.push_back(v_2b);
+    pVertices.push_back(v_3b);
 
     unsigned int i = 0;
 
@@ -305,21 +417,51 @@ QuadtreeRenderer::update_vbo(){
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
     glBindVertexArray(0);
 
+    if (m_vao_p)
+        glDeleteBuffers(1, &m_vao_p);
+
+    glGenVertexArrays(1, &m_vao_p);
+    glBindVertexArray(m_vao_p);
+    
+    GLuint vbo_p;
+    glGenBuffers(1, &vbo_p);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_p);
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float)* 6 * pVertices.size()
+        , pVertices.data(), GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), nullptr);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+    glBindVertexArray(0);
+
 }
 
 
 
 void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_dim)
 {
-    update_tree(screen_pos);
-    update_vbo();
 
 
     float ratio = (float)screen_dim.x / screen_dim.y;
+    float ratio2 = (float)screen_dim.y / screen_dim.x;
 
-    glm::mat4 projection = glm::ortho(-0.1f, 1.1f, -0.1f, ratio);
-    glm::mat4 view = glm::mat4();
+    glm::mat4 model = glm::translate(glm::vec3(0.25f, 0.15f, 0.0f))* glm::scale(glm::vec3(0.4f, 0.4f * ratio, 1.0));
+    glm::mat4 view = model * glm::mat4();
+    glm::mat4 projection = glm::ortho(0.0f, 1.0f, 0.0f, 1.0f);
+        
+    glm::vec4 screen_pos_trans = glm::inverse(model) * glm::vec4(screen_pos, 0.0f, 1.0f);
 
+    //std::cout << std::endl
+    //std::cout << screen_pos.x << " " << screen_pos.y << std::endl;
+    //std::cout << screen_pos_trans.x << " " << screen_pos_trans.y << std::endl;
+    
+    update_tree(glm::vec2(screen_pos_trans.x, screen_pos_trans.y));
+    //update_tree(screen_pos);
+    update_vbo(screen_pos);
+        
+    
     glUseProgram(m_program_id);
     glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Projection"), 1, GL_FALSE,
         glm::value_ptr(projection));
@@ -327,7 +469,20 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
         glm::value_ptr(view));
 
     glBindVertexArray(m_vao);
-    glDrawArrays(GL_LINE_STRIP, 0, m_cubeVertices.size());
+    glDrawArrays(GL_LINES, 0, m_cubeVertices.size());
+    glBindVertexArray(0);
+
+    glUseProgram(0);
+
+
+    glUseProgram(m_program_id);
+    glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Projection"), 1, GL_FALSE,
+        glm::value_ptr(projection));
+    glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Modelview"), 1, GL_FALSE,
+        glm::value_ptr(glm::mat4()));
+
+    glBindVertexArray(m_vao_p);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
     glBindVertexArray(0);
 
     glUseProgram(0);
