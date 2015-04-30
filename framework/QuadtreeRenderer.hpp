@@ -55,26 +55,28 @@ public:
     };
 
     struct qtree{
-        q_node_ptr root_node;  
+
+                q_node_ptr root_node;  
         unsigned max_depth;
         unsigned budget;
         unsigned frame_budget;
         unsigned budget_filled;        
         bool strict;
+
+
+        std::vector<q_node_ptr> qtree_index_data;
     };
+
+
         
 public:
     QuadtreeRenderer();
     ~QuadtreeRenderer() {}
 
-    void add(float, glm::vec4);
-    void add(unsigned, glm::vec4);
-
     void reset();
         
     void update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_dim);
-
-
+    
     struct greater_prio_ptr : public std::binary_function<QuadtreeRenderer::q_node_ptr,
         QuadtreeRenderer::q_node_ptr, bool>
     {
@@ -109,7 +111,8 @@ private:
     
     unsigned int      m_vao_p;
 
-    qtree m_tree;
+    qtree m_tree_ideal;
+    qtree m_tree_current;
 
     std::vector<QuadtreeRenderer::Vertex> m_cubeVertices;
 
