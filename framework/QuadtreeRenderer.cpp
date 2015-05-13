@@ -63,48 +63,54 @@ namespace helper {
 QuadtreeRenderer::QuadtreeRenderer()
 : m_program_id(0),
 m_vao(0),
-m_dirty(true),
-m_tree_current(),
-m_tree_ideal()
+m_dirty(true)
 {
     m_program_id = createProgram(quad_vertex_shader, quad_fragment_shader);
 
-    m_tree_current.budget = 2000;
-    m_tree_current.budget_filled = 0;
-    m_tree_current.frame_budget = 1;    
-    m_tree_current.max_depth = 4;
-    
-    m_tree_current.root_node = new q_node();
-    m_tree_current.root_node->node_id = 0;
-    m_tree_current.root_node->root = true;
-    m_tree_current.root_node->leaf = true;
-    m_tree_current.root_node->depth = 0;
-    m_tree_current.root_node->priority = 1.0;
-    m_tree_current.root_node->error = 0.0;
-    
-    m_tree_ideal.budget = m_tree_current.budget;
-    m_tree_ideal.budget_filled = 0;
-    m_tree_ideal.frame_budget = 9999999;
-    m_tree_ideal.max_depth = m_tree_current.max_depth;
+    m_tree_current = new q_tree();
 
-    m_tree_ideal.root_node = new q_node();
-    m_tree_ideal.root_node->node_id = 0;
-    m_tree_ideal.root_node->root = true;
-    m_tree_ideal.root_node->leaf = true;
-    m_tree_ideal.root_node->depth = 0;
-    m_tree_ideal.root_node->priority = 1.0; 
-    m_tree_ideal.root_node->error = 0.0;//projection of face to POI/Camera
+    m_tree_current->budget = 2000;
+    m_tree_current->budget_filled = 0;
+    m_tree_current->frame_budget = 1;    
+    m_tree_current->max_depth = 4;
+    
+    m_tree_current->root_node = new q_node();
+    m_tree_current->root_node->node_id = 0;
+    m_tree_current->root_node->root = true;
+    m_tree_current->root_node->leaf = true;
+    m_tree_current->root_node->depth = 0;
+    m_tree_current->root_node->priority = 1.0;
+    m_tree_current->root_node->error = 0.0;
+
+    m_tree_current->root_node->tree = m_tree_current;
+    
+    m_tree_ideal = new q_tree();
+
+    m_tree_ideal->budget = m_tree_current->budget;
+    m_tree_ideal->budget_filled = 0;
+    m_tree_ideal->frame_budget = 9999999;
+    m_tree_ideal->max_depth = m_tree_current->max_depth;
+
+    m_tree_ideal->root_node = new q_node();
+    m_tree_ideal->root_node->node_id = 0;
+    m_tree_ideal->root_node->root = true;
+    m_tree_ideal->root_node->leaf = true;
+    m_tree_ideal->root_node->depth = 0;
+    m_tree_ideal->root_node->priority = 1.0; 
+    m_tree_ideal->root_node->error = 0.0;//projection of face to POI/Camera
+
+    m_tree_ideal->root_node->tree = m_tree_ideal;
 
     for (unsigned c = 0; c != CHILDREN; ++c){
-        m_tree_current.root_node->child_node[c] = nullptr;
+        m_tree_current->root_node->child_node[c] = nullptr;
     }
 
-    size_t max_nodes_finest_level = q_layout.total_node_count_level(m_tree_current.max_depth);
-    size_t total_nodes = q_layout.total_node_count(m_tree_current.max_depth);
+    size_t max_nodes_finest_level = q_layout.total_node_count_level(m_tree_current->max_depth);
+    size_t total_nodes = q_layout.total_node_count(m_tree_current->max_depth);
 
     std::cout << "max_nodes_finest_level " << max_nodes_finest_level << " Dimx_y: " << (size_t)glm::sqrt((float)max_nodes_finest_level) << " Total nodes:" << total_nodes << std::endl;
 
-    m_tree_current.qtree_index_data.resize(max_nodes_finest_level, m_tree_current.root_node);
+    m_tree_current->qtree_index_data.resize(max_nodes_finest_level, m_tree_current->root_node);
     
 }
 
@@ -120,9 +126,10 @@ QuadtreeRenderer::split_node(QuadtreeRenderer::q_node_ptr n)
         n->child_node[c]->depth = n->depth + 1;
         n->child_node[c]->priority = n->priority * 0.25;
         n->child_node[c]->error = n->error * 0.25;
+        n->child_node[c]->tree = n->tree;
 
         ///////setting node index image
-        size_t max_nodes_finest_level = q_layout.total_node_count_level(m_tree_current.max_depth);
+        size_t max_nodes_finest_level = q_layout.total_node_count_level(m_tree_current->max_depth);
         auto nodes_on_lvl = q_layout.total_node_count_level(n->child_node[c]->depth);
         auto one_node_to_finest = glm::sqrt((float)max_nodes_finest_level / nodes_on_lvl);
         auto node_pos = q_layout.node_position(n->child_node[c]->node_id);
@@ -130,19 +137,19 @@ QuadtreeRenderer::split_node(QuadtreeRenderer::q_node_ptr n)
         
         for (unsigned y = 0; y != one_node_to_finest; ++y){
             for (unsigned x = 0; x != one_node_to_finest; ++x){
-                auto index = (node_pos.x * one_node_to_finest + x) + (node_pos.y * one_node_to_finest + y) * resolution;
-                m_tree_current.qtree_index_data[index] = n->child_node[c];
+                size_t index = (node_pos.x * one_node_to_finest + x) + (node_pos.y * one_node_to_finest + y) * resolution;
+                m_tree_current->qtree_index_data[index] = n->child_node[c];
             }
         }
     }
 #if 0
-    size_t max_nodes_finest_level = q_layout.total_node_count_level(m_tree_current.max_depth);
+    size_t max_nodes_finest_level = q_layout.total_node_count_level(m_tree_current->max_depth);
     auto resolution = (size_t)glm::sqrt((float)max_nodes_finest_level);
     
     for (unsigned y = 0; y != resolution; ++y){
         for (unsigned x = 0; x != resolution; ++x){
             auto index = (x) + (y) * resolution;
-            std::cout << m_tree_current.qtree_index_data[index]->node_id << " ";
+            std::cout << m_tree_current->qtree_index_data[index]->node_id << " ";
         }
         std::cout<<std::endl;
     }
@@ -155,7 +162,7 @@ QuadtreeRenderer::split_node(QuadtreeRenderer::q_node_ptr n)
 bool
 QuadtreeRenderer::splitable(QuadtreeRenderer::q_node_ptr n){
 
-    if (n->depth >= m_tree_current.max_depth){
+    if (n->depth >= m_tree_current->max_depth){
         return false;
     }
 
@@ -190,7 +197,7 @@ QuadtreeRenderer::collapse_node(QuadtreeRenderer::q_node_ptr n)
     n->leaf = true;
 
     ///////setting node index image
-    size_t max_nodes_finest_level = q_layout.total_node_count_level(m_tree_current.max_depth);
+    size_t max_nodes_finest_level = q_layout.total_node_count_level(m_tree_current->max_depth);
     auto nodes_on_lvl = q_layout.total_node_count_level(n->depth);
     auto one_node_to_finest = glm::sqrt((float)max_nodes_finest_level / nodes_on_lvl);
     auto node_pos = q_layout.node_position(n->node_id);
@@ -198,22 +205,97 @@ QuadtreeRenderer::collapse_node(QuadtreeRenderer::q_node_ptr n)
 
     for (unsigned y = 0; y != one_node_to_finest; ++y){
         for (unsigned x = 0; x != one_node_to_finest; ++x){
-            auto index = (node_pos.x * one_node_to_finest + x) + (node_pos.y * one_node_to_finest + y) * resolution;
-            m_tree_current.qtree_index_data[index] = n;
+            size_t index = (node_pos.x * one_node_to_finest + x) + (node_pos.y * one_node_to_finest + y) * resolution;
+            m_tree_current->qtree_index_data[index] = n;
         }
     }
 
     
 }
 
+QuadtreeRenderer::q_node_ptr
+QuadtreeRenderer::get_neighbour_node(const QuadtreeRenderer::q_node_ptr n, const QuadtreeRenderer::q_tree_ptr tree, const unsigned neighbour_nbr) const{
+    
+    auto offset_x = -1;
+    auto offset_y = -1;
 
+    switch (neighbour_nbr){
+    case 0:
+        offset_x = -1;
+        offset_y = -1;
+        break;
+    case 1:
+        offset_x = 0;
+        offset_y = -1;
+        break;
+    case 2:
+        offset_x = 1;
+        offset_y = -1;
+        break;
+    case 3:
+        offset_x = 1;
+        offset_y = 0;
+        break;
+    case 4:
+        offset_x = 1;
+        offset_y = 1;
+    case 5:
+        offset_x = 0;
+        offset_y = 1;
+        break;
+    case 6:
+        offset_x = -1;
+        offset_y = 1;
+        break;
+    case 7:
+        offset_x = -1;
+        offset_y = 0;
+        break;
+    default:
+        break;
+    }
+
+    size_t max_nodes_finest_level = q_layout.total_node_count_level(m_tree_current->max_depth);
+    auto nodes_on_lvl = q_layout.total_node_count_level(n->depth);
+    auto one_node_to_finest = glm::sqrt((float)max_nodes_finest_level / nodes_on_lvl);
+    auto node_pos = q_layout.node_position(n->node_id);
+    auto resolution = (size_t)glm::sqrt((float)max_nodes_finest_level);
+
+    auto posx = node_pos.x * one_node_to_finest;
+    auto posy = node_pos.y * one_node_to_finest;
+
+    if ((posx - offset_x) < 0                             ||
+        (node_pos.y * one_node_to_finest - offset_y) < 0  ||
+        (posx + offset_x) > resolution                    ||
+        (node_pos.y * one_node_to_finest + offset_y) > resolution)
+    {
+        return nullptr;
+    }
+
+    auto index = (posx - offset_x) + (node_pos.y * one_node_to_finest - offset_y) * resolution;    
+    return tree->qtree_index_data[index];
+}
+
+bool
+QuadtreeRenderer::check_neighbours_for_level_div(const QuadtreeRenderer::q_node_ptr n, const float lvl_diff) const
+{            
+    for (unsigned n_nbr = 0; n_nbr != CHILDREN; ++n_nbr){
+        auto neighbor = get_neighbour_node(n, m_tree_current, n_nbr);
+        if (neighbor)
+        if ((neighbor->depth - n->depth) > lvl_diff){
+            return false;
+        }
+    }
+    
+    return true;
+}
 
 void
-QuadtreeRenderer::update_priorits(qtree& tree, glm::vec2 screen_pos){
+QuadtreeRenderer::update_priorits(QuadtreeRenderer::q_tree_ptr tree, glm::vec2 screen_pos){
 
     std::stack<q_node_ptr> node_stack;
 
-    node_stack.push(m_tree_current.root_node);
+    node_stack.push(m_tree_current->root_node);
 
     q_node_ptr current_node;
 
@@ -268,7 +350,7 @@ QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
 
     std::stack<q_node_ptr> node_stack;
 
-    node_stack.push(m_tree_current.root_node);
+    node_stack.push(m_tree_current->root_node);
 
     q_node_ptr current_node;
 
@@ -301,16 +383,18 @@ QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
     unsigned current_budget = 0;
         
     while (!split_able_nodes_pq.empty()
-        && current_budget < m_tree_current.frame_budget 
-        && m_tree_current.budget_filled < m_tree_current.budget){
+        && current_budget < m_tree_current->frame_budget 
+        && m_tree_current->budget_filled < m_tree_current->budget){
 
         q_node_ptr q_split_node = split_able_nodes_pq.top();
         split_able_nodes_pq.pop();
-
-        split_node(q_split_node);
+        
+        if (check_neighbours_for_level_div(q_split_node, 1.0f)){
+            split_node(q_split_node);
+        }
 
         ++current_budget;
-        m_tree_current.budget_filled += CHILDREN;
+        m_tree_current->budget_filled += CHILDREN;
     }
 
 }
@@ -325,7 +409,7 @@ QuadtreeRenderer::update_vbo(glm::vec2 screen_pos){
 
     std::stack<q_node_ptr> node_stack;
 
-    node_stack.push(m_tree_current.root_node);
+    node_stack.push(m_tree_current->root_node);
 
     q_node_ptr current_node;
 

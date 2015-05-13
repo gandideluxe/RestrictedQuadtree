@@ -22,8 +22,10 @@
 
 class QuadtreeRenderer
 {
-    typedef struct q_node;
+    struct q_node;
+    struct q_tree;
     typedef q_node* q_node_ptr;
+    typedef q_tree* q_tree_ptr;
 
 public:
     struct Vertex{
@@ -41,6 +43,8 @@ public:
         q_node_ptr parent;
         q_node_ptr child_node[CHILDREN];
 
+        q_tree_ptr tree;
+
         q_node(){
             root = false;
             leaf = true;
@@ -54,21 +58,18 @@ public:
         bool operator>(const q_node& rhs) const { priority > rhs.priority; }
     };
 
-    struct qtree{
+    struct q_tree{
 
-                q_node_ptr root_node;  
+        q_node_ptr root_node;  
         unsigned max_depth;
         unsigned budget;
         unsigned frame_budget;
         unsigned budget_filled;        
         bool strict;
-
-
+        
         std::vector<q_node_ptr> qtree_index_data;
     };
-
-
-        
+            
 public:
     QuadtreeRenderer();
     ~QuadtreeRenderer() {}
@@ -102,17 +103,20 @@ private:
     bool splitable(q_node_ptr n);
     bool collabsible(q_node_ptr n);
 
+    q_node_ptr get_neighbour_node(const q_node_ptr n, const q_tree_ptr tree, const unsigned neighbour_nbr) const;
+    bool check_neighbours_for_level_div(const q_node_ptr n, const float level_div) const;
+
     void update_vbo(glm::vec2 screen_pos);
     void update_tree(glm::vec2 screen_pos);
-    void update_priorits(qtree& m_tree, glm::vec2 pos);
+    void update_priorits(q_tree_ptr m_tree, glm::vec2 pos);
 
     unsigned int      m_program_id;
     unsigned int      m_vao;
     
     unsigned int      m_vao_p;
 
-    qtree m_tree_ideal;
-    qtree m_tree_current;
+    q_tree_ptr m_tree_ideal;
+    q_tree_ptr m_tree_current;
 
     std::vector<QuadtreeRenderer::Vertex> m_cubeVertices;
 
