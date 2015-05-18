@@ -19,6 +19,7 @@
 #include <glm/vec4.hpp>
 
 #define CHILDREN 4
+#define NEIGHBORS 8
 
 class QuadtreeRenderer
 {

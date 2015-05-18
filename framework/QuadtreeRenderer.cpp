@@ -137,7 +137,7 @@ QuadtreeRenderer::split_node(QuadtreeRenderer::q_node_ptr n)
         
         for (unsigned y = 0; y != one_node_to_finest; ++y){
             for (unsigned x = 0; x != one_node_to_finest; ++x){
-                size_t index = (node_pos.x * one_node_to_finest + x) + (node_pos.y * one_node_to_finest + y) * resolution;
+                size_t index = (node_pos.x * one_node_to_finest + x) + (resolution - 1 - ((node_pos.y) * one_node_to_finest + y)) * resolution;
                 m_tree_current->qtree_index_data[index] = n->child_node[c];
             }
         }
@@ -149,7 +149,10 @@ QuadtreeRenderer::split_node(QuadtreeRenderer::q_node_ptr n)
     for (unsigned y = 0; y != resolution; ++y){
         for (unsigned x = 0; x != resolution; ++x){
             auto index = (x) + (y) * resolution;
-            std::cout << m_tree_current->qtree_index_data[index]->node_id << " ";
+            if (m_tree_current->qtree_index_data[index]->node_id < 10)
+                std::cout << " " << m_tree_current->qtree_index_data[index]->node_id << " ";
+            else
+                std::cout << m_tree_current->qtree_index_data[index]->node_id << " ";
         }
         std::cout<<std::endl;
     }
@@ -216,6 +219,13 @@ QuadtreeRenderer::collapse_node(QuadtreeRenderer::q_node_ptr n)
 QuadtreeRenderer::q_node_ptr
 QuadtreeRenderer::get_neighbour_node(const QuadtreeRenderer::q_node_ptr n, const QuadtreeRenderer::q_tree_ptr tree, const unsigned neighbour_nbr) const{
     
+    size_t max_nodes_finest_level = q_layout.total_node_count_level(m_tree_current->max_depth);
+    auto nodes_on_lvl = q_layout.total_node_count_level(n->depth);
+    unsigned one_node_to_finest = glm::sqrt((float)max_nodes_finest_level / nodes_on_lvl);
+    auto node_pos = q_layout.node_position(n->node_id);
+    auto resolution = (size_t)glm::sqrt((float)max_nodes_finest_level);
+
+
     auto offset_x = -1;
     auto offset_y = -1;
 
@@ -229,23 +239,23 @@ QuadtreeRenderer::get_neighbour_node(const QuadtreeRenderer::q_node_ptr n, const
         offset_y = -1;
         break;
     case 2:
-        offset_x = 1;
+        offset_x = one_node_to_finest;
         offset_y = -1;
         break;
     case 3:
-        offset_x = 1;
+        offset_x = one_node_to_finest;
         offset_y = 0;
         break;
     case 4:
-        offset_x = 1;
-        offset_y = 1;
+        offset_x = one_node_to_finest;
+        offset_y = one_node_to_finest;
     case 5:
         offset_x = 0;
-        offset_y = 1;
+        offset_y = one_node_to_finest;
         break;
     case 6:
         offset_x = -1;
-        offset_y = 1;
+        offset_y = one_node_to_finest;
         break;
     case 7:
         offset_x = -1;
@@ -254,37 +264,45 @@ QuadtreeRenderer::get_neighbour_node(const QuadtreeRenderer::q_node_ptr n, const
     default:
         break;
     }
-
-    size_t max_nodes_finest_level = q_layout.total_node_count_level(m_tree_current->max_depth);
-    auto nodes_on_lvl = q_layout.total_node_count_level(n->depth);
-    auto one_node_to_finest = glm::sqrt((float)max_nodes_finest_level / nodes_on_lvl);
-    auto node_pos = q_layout.node_position(n->node_id);
-    auto resolution = (size_t)glm::sqrt((float)max_nodes_finest_level);
-
+    
     auto posx = node_pos.x * one_node_to_finest;
     auto posy = node_pos.y * one_node_to_finest;
 
-    if ((posx - offset_x) < 0                             ||
-        (node_pos.y * one_node_to_finest - offset_y) < 0  ||
-        (posx + offset_x) > resolution                    ||
-        (node_pos.y * one_node_to_finest + offset_y) > resolution)
+    if ((posx + offset_x) < 0                             ||
+        (posy + offset_y) < 0 ||
+        (posx + offset_x) >= resolution                    ||
+        (posy + offset_y) >= resolution)
     {
         return nullptr;
     }
 
-    auto index = (posx - offset_x) + (node_pos.y * one_node_to_finest - offset_y) * resolution;    
+    unsigned index = (posx + offset_x) + (resolution - 1 - (posy + offset_y)) * resolution;
+
+    //if (tree->qtree_index_data[index])
+    //    std::cout << "Neighbor: " << neighbour_nbr << " Pos: " << posx + offset_x << " , " << node_pos.y * one_node_to_finest - offset_y << " d: " << n->depth << " dn: " << tree->qtree_index_data[index]->depth << " ID: " << n->node_id << std::endl;
+
+    if (tree->qtree_index_data[index] == n){
+        std::cout << "Danger Dragons!" << std::endl;
+        assert(0);
+    }
+       
     return tree->qtree_index_data[index];
 }
 
 bool
 QuadtreeRenderer::check_neighbours_for_level_div(const QuadtreeRenderer::q_node_ptr n, const float lvl_diff) const
 {            
-    for (unsigned n_nbr = 0; n_nbr != CHILDREN; ++n_nbr){
+    //std::cout << "!" << std::endl;
+
+    assert(n);
+
+    for (unsigned n_nbr = 0; n_nbr != NEIGHBORS; ++n_nbr){
         auto neighbor = get_neighbour_node(n, m_tree_current, n_nbr);
+        
         if (neighbor)
-        if ((neighbor->depth - n->depth) > lvl_diff){
-            return false;
-        }
+        if (((int)n->depth - (int)neighbor->depth) >= lvl_diff){
+                return false;
+            }
     }
     
     return true;
@@ -344,7 +362,7 @@ QuadtreeRenderer::update_priorits(QuadtreeRenderer::q_tree_ptr tree, glm::vec2 s
 
 void
 QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
-
+    //std::cout << "?" << std::endl;
     std::vector<q_node_ptr> split_able_nodes;
     std::vector<q_node_ptr> coll_able_nodes;
 
@@ -391,10 +409,11 @@ QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
         
         if (check_neighbours_for_level_div(q_split_node, 1.0f)){
             split_node(q_split_node);
+//            std::cout << "split" << std::endl;
+            ++current_budget;
+            m_tree_current->budget_filled += CHILDREN;
         }
 
-        ++current_budget;
-        m_tree_current->budget_filled += CHILDREN;
     }
 
 }
