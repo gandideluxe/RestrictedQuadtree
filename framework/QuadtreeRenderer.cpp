@@ -63,16 +63,21 @@ namespace helper {
 QuadtreeRenderer::QuadtreeRenderer()
 : m_program_id(0),
 m_vao(0),
+m_vao_p(0),
+m_vao_r(0),
+m_vbo(0),
+m_vbo_p(0),
+m_vbo_r(0),
 m_dirty(true)
 {
     m_program_id = createProgram(quad_vertex_shader, quad_fragment_shader);
 
     m_tree_current = new q_tree();
 
-    m_tree_current->budget = 2000;
+    m_tree_current->budget = 5000;
     m_tree_current->budget_filled = 0;
-    m_tree_current->frame_budget = 1;    
-    m_tree_current->max_depth = 4;
+    m_tree_current->frame_budget = 2;    
+    m_tree_current->max_depth = 8;
     
     m_tree_current->root_node = new q_node();
     m_tree_current->root_node->node_id = 0;
@@ -111,8 +116,77 @@ m_dirty(true)
     std::cout << "max_nodes_finest_level " << max_nodes_finest_level << " Dimx_y: " << (size_t)glm::sqrt((float)max_nodes_finest_level) << " Total nodes:" << total_nodes << std::endl;
 
     m_tree_current->qtree_index_data.resize(max_nodes_finest_level, m_tree_current->root_node);
+
+    m_treeInfo.max_budget = m_tree_current->budget;
+    m_treeInfo.used_budget = 0;
+
+    m_treeInfo.page_dim = glm::uvec2(512, 512);
+    m_treeInfo.ref_dim = glm::uvec2(2560, 2560);
+
+    m_treeInfo.global_error = (float)m_treeInfo.ref_dim.x / m_treeInfo.page_dim.x + (float)m_treeInfo.ref_dim.y / m_treeInfo.page_dim.y;
+    m_treeInfo.global_error_difference = (float)m_treeInfo.ref_dim.x / m_treeInfo.page_dim.x + (float)m_treeInfo.ref_dim.y / m_treeInfo.page_dim.y;
+        
+}
+
+void
+QuadtreeRenderer::set_restriction(bool restriction, glm::vec2 restriction_line[2], bool restriction_direction)
+{
+    m_restriction = restriction;
+    m_restriction_line[0] = restriction_line[0];
+    m_restriction_line[1] = restriction_line[1];
+
+    m_restriction_direction = restriction_direction;
+
     
 }
+
+void
+QuadtreeRenderer::set_frustum(glm::vec2 camera, glm::vec2 frustum_points[2] )
+{
+    m_camera_point = camera;
+
+    m_frustrum_points[0] = frustum_points[0];
+    m_frustrum_points[1] = frustum_points[1];
+}
+
+void
+QuadtreeRenderer::set_test_point(glm::vec2 test_point)
+{    
+    m_test_point = test_point;    
+}
+
+
+bool
+QuadtreeRenderer::check_frustrum(glm::vec2 pos) const
+{
+    glm::vec2 p1 = m_frustrum_points[0];
+    glm::vec2 p2 = m_frustrum_points[1];
+
+    glm::vec2 c = m_camera_point;
+    
+    glm::vec2 min = glm::vec2(glm::min(p1.x, p2.x), glm::min(p1.y, p2.y));
+    glm::vec2 max = glm::vec2(glm::max(p1.x, p2.x), glm::max(p1.y, p2.y));
+
+    glm::vec2 n1 = c - p1;
+    n1 = glm::vec2(-n1.y, n1.x);
+
+    glm::vec2 n2 = p2 - c;
+    n2 = glm::vec2(-n2.y, n2.x);
+
+    float s1 = glm::dot(n1, pos - c);
+    float s2 = glm::dot(n2, pos - c);
+            
+    std::cout << "d1: " << s1 << " d2: " << s2 << std::endl;
+
+    if (s1 > 0.0 && s2 > 0.0)
+        return true;
+    else
+        return false;
+        
+//http://upload.wikimedia.org/math/c/a/e/cae82210ba48deb8ff6fb0134a90b36e.png
+
+}
+
 
 void
 QuadtreeRenderer::split_node(QuadtreeRenderer::q_node_ptr n)
@@ -211,9 +285,7 @@ QuadtreeRenderer::collapse_node(QuadtreeRenderer::q_node_ptr n)
             size_t index = (node_pos.x * one_node_to_finest + x) + (node_pos.y * one_node_to_finest + y) * resolution;
             m_tree_current->qtree_index_data[index] = n;
         }
-    }
-
-    
+    }        
 }
 
 QuadtreeRenderer::q_node_ptr
@@ -309,7 +381,7 @@ QuadtreeRenderer::check_neighbours_for_level_div(const QuadtreeRenderer::q_node_
 }
 
 void
-QuadtreeRenderer::update_priorits(QuadtreeRenderer::q_tree_ptr tree, glm::vec2 screen_pos){
+QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree, glm::vec2 screen_pos){
 
     std::stack<q_node_ptr> node_stack;
 
@@ -349,19 +421,33 @@ QuadtreeRenderer::update_priorits(QuadtreeRenderer::q_tree_ptr tree, glm::vec2 s
         auto v_length = 1.0 / (max_pos.x + 1);
 
         auto ref_pos = glm::vec2(v_pos.x + v_length * 0.5f, v_pos.y + v_length * 0.5f);
+
+        auto depth = (*l)->depth + 1;
         
-        auto distance = 1.0f/glm::length(ref_pos - screen_pos);
+        auto importance = std::sqrt(1.0f/glm::length(ref_pos - screen_pos) / depth);
 
-        auto depth = (*l)->depth;
-
-        auto prio = distance / glm::pow((float)depth, 2.0f);
-
+        //std::cout << "rx " << ref_pos.x << " ry " << ref_pos.y << " sx " << screen_pos.x << " sy " << screen_pos.y << " I " << importance << std::endl;
+                
+        auto local_error = ((float)m_treeInfo.ref_dim.x / (m_treeInfo.page_dim.x * depth) + (float)m_treeInfo.ref_dim.y / (m_treeInfo.page_dim.y * depth)) * 0.5;
+        
+        (*l)->importance = importance;
+        (*l)->error = local_error;
+        
+        auto prio = importance * local_error;
         (*l)->priority = prio;
     }
+
+    auto global_error = 0.0;
+    for (auto l = leafs.begin(); l != leafs.end(); ++l){
+        global_error += ((1.0 / (leafs.size() * m_treeInfo.page_dim.x * m_treeInfo.page_dim.y)) * ((*l)->error) * (*l)->importance);
+    }
+    
+    m_treeInfo.global_error_difference = global_error - m_treeInfo.global_error;
+    m_treeInfo.global_error = global_error;
 }
 
 void
-QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
+QuadtreeRenderer::update_tree(){
     //std::cout << "?" << std::endl;
     std::vector<q_node_ptr> split_able_nodes;
     std::vector<q_node_ptr> coll_able_nodes;
@@ -372,7 +458,7 @@ QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
 
     q_node_ptr current_node;
 
-    update_priorits(m_tree_current, screen_pos);
+    update_priorities(m_tree_current, m_camera_point_trans);
 
     while (!node_stack.empty()){
         current_node = node_stack.top();
@@ -407,14 +493,17 @@ QuadtreeRenderer::update_tree(glm::vec2 screen_pos){
         q_node_ptr q_split_node = split_able_nodes_pq.top();
         split_able_nodes_pq.pop();
         
-        if (check_neighbours_for_level_div(q_split_node, 1.0f)){
+        if (check_neighbours_for_level_div(q_split_node, 1.0f)
+            && q_split_node->error > 0.8){
+
             split_node(q_split_node);
-//            std::cout << "split" << std::endl;
+
             ++current_budget;
             m_tree_current->budget_filled += CHILDREN;
         }
-
     }
+
+    m_treeInfo.used_budget = m_tree_current->budget_filled;
 
 }
 
@@ -424,7 +513,7 @@ QuadtreeRenderer::reset(){
 }
 
 void
-QuadtreeRenderer::update_vbo(glm::vec2 screen_pos){
+QuadtreeRenderer::update_vbo(){
 
     std::stack<q_node_ptr> node_stack;
 
@@ -453,7 +542,7 @@ QuadtreeRenderer::update_vbo(glm::vec2 screen_pos){
     m_cubeVertices.clear();
     //std::cout << std::endl;
     unsigned counter = 0u;
-#if 1
+
     for (auto l = leafs.begin(); l != leafs.end(); ++l){
         ++counter;
 
@@ -498,57 +587,112 @@ QuadtreeRenderer::update_vbo(glm::vec2 screen_pos){
         m_cubeVertices.push_back(v_1b);
     }
 
-#else
 
-    QuadtreeRenderer::Vertex v_1b;
-    QuadtreeRenderer::Vertex v_2b;
-    QuadtreeRenderer::Vertex v_3b;
-    QuadtreeRenderer::Vertex v_4b;
-
-    v_1b.position = glm::vec3(0.0, 0.0, 0.0f);
-    v_1b.color = glm::vec3(1.0f, 1.0f, 1.0f);
-
-    v_2b.position = glm::vec3(1.0, 0.0, 0.0f);
-    v_2b.color = glm::vec3(1.0f, 1.0f, 1.0f);
-
-    v_3b.position = glm::vec3(1.0, 1.0, 0.0f);
-    v_3b.color = glm::vec3(1.0f, 1.0f, 1.0f);
-
-    v_4b.position = glm::vec3(0.0, 1.0, 0.0f);
-    v_4b.color = glm::vec3(1.0f, 1.0f, 1.0f);
-
-    m_cubeVertices.push_back(v_1b);
-    m_cubeVertices.push_back(v_2b);
-
-    m_cubeVertices.push_back(v_2b);
-    m_cubeVertices.push_back(v_3b);
-
-    m_cubeVertices.push_back(v_3b);
-    m_cubeVertices.push_back(v_4b);
-
-    m_cubeVertices.push_back(v_4b);
-    m_cubeVertices.push_back(v_1b);
-
-
-#endif
-
-    QuadtreeRenderer::Vertex v_1b;
-    QuadtreeRenderer::Vertex v_2b;
-    QuadtreeRenderer::Vertex v_3b;
-
-    v_1b.position = glm::vec3(screen_pos.x, screen_pos.y + 0.01f, 0.0f);
-    v_1b.color = glm::vec3(1.0f, 0.0f, 0.0f);
-
-    v_2b.position = glm::vec3(screen_pos.x - 0.01f, screen_pos.y - 0.01f, 0.0f);
-    v_2b.color = glm::vec3(1.0f, 0.0f, 0.0f);
-
-    v_3b.position = glm::vec3(screen_pos.x + 0.01f, screen_pos.y - 0.01f, 0.0f);
-    v_3b.color = glm::vec3(1.0f, 0.0f, 0.0f);
-    
     std::vector<QuadtreeRenderer::Vertex> pVertices;
-    pVertices.push_back(v_1b);
-    pVertices.push_back(v_2b);
-    pVertices.push_back(v_3b);
+
+    {
+        QuadtreeRenderer::Vertex v_1b;
+        QuadtreeRenderer::Vertex v_2b;
+        QuadtreeRenderer::Vertex v_3b;
+        QuadtreeRenderer::Vertex v_4b;
+        QuadtreeRenderer::Vertex v_5b;
+        QuadtreeRenderer::Vertex v_6b;
+
+        v_1b.position = glm::vec3(m_camera_point_trans.x, m_camera_point_trans.y, 0.0f);
+        v_1b.color = glm::vec3(1.0f, 0.0f, 0.0f);
+        pVertices.push_back(v_1b);
+
+
+        glm::vec3 color = glm::vec3(0.0f, 1.0f, 0.0f);
+        if (m_restriction_direction)
+            color = glm::vec3(0.0f, 0.0f, 1.0f);
+        if (!m_restriction)
+            color = glm::vec3(0.2f, 0.2f, 0.2f);
+
+        v_2b.position = glm::vec3(m_restriction_line_trans[0].x, m_restriction_line_trans[0].y, 0.0f);
+        v_2b.color = color;
+
+        v_3b.position = glm::vec3(m_restriction_line_trans[1].x, m_restriction_line_trans[1].y, 0.0f);
+        v_3b.color = color;
+
+        pVertices.push_back(v_2b);
+        pVertices.push_back(v_3b);
+
+        color = glm::vec3(1.0f, 1.0f, 0.0f);
+
+        v_4b.position = glm::vec3(m_frustrum_points_trans[0].x, m_frustrum_points_trans[0].y, 0.0f);
+        v_4b.color = color;
+
+        v_5b.position = glm::vec3(m_frustrum_points_trans[1].x, m_frustrum_points_trans[1].y, 0.0f);
+        v_5b.color = color;
+
+        pVertices.push_back(v_4b);
+        pVertices.push_back(v_5b);
+
+        if (check_frustrum(m_test_point)){
+            color = glm::vec3(0.0f, 1.0f, 0.0f);
+        }
+        else{
+            color = glm::vec3(1.0f, 0.0f, 0.0f);
+        }
+
+        v_6b.position = glm::vec3(m_test_point_trans.x, m_test_point_trans.y, 0.0f);;
+        v_6b.color = color;
+
+        pVertices.push_back(v_6b);
+
+    }
+
+    std::vector<QuadtreeRenderer::Vertex> rVertices;
+    {
+        QuadtreeRenderer::Vertex v_1b;
+        QuadtreeRenderer::Vertex v_2b;
+            
+        glm::vec3 color = glm::vec3(0.0f, 1.0f, 0.0f);
+        
+        if (m_restriction_direction)
+            color = glm::vec3(0.0f, 0.0f, 1.0f);
+
+        if (!m_restriction)
+            color = glm::vec3(0.2f, 0.2f, 0.2f);
+
+
+        v_1b.position = glm::vec3(m_restriction_line[0].x, m_restriction_line[0].y, 0.0f);
+        v_1b.color = color;
+
+        v_2b.position = glm::vec3(m_restriction_line[1].x, m_restriction_line[1].y, 0.0f);
+        v_2b.color = color;
+                
+        rVertices.push_back(v_1b);
+        rVertices.push_back(v_2b);
+
+        QuadtreeRenderer::Vertex v_3b;
+        QuadtreeRenderer::Vertex v_4b;
+        QuadtreeRenderer::Vertex v_5b;
+        QuadtreeRenderer::Vertex v_6b;
+
+        color = glm::vec3(1.0f, 1.0f, 0.0f);
+
+        glm::vec2 ep = m_frustrum_points[0];
+        
+        v_3b.position = glm::vec3(m_camera_point.x, m_camera_point.y, 0.0f);
+        v_3b.color = color;
+        v_4b.position = glm::vec3(ep.x, ep.y, 0.0f);
+        v_4b.color = color;
+
+        ep = m_frustrum_points[1];
+
+        v_5b.position = glm::vec3(m_camera_point.x, m_camera_point.y, 0.0f);
+        v_5b.color = color;
+        v_6b.position = glm::vec3(ep.x, ep.y, 0.0f);
+        v_6b.color = color;
+
+        rVertices.push_back(v_3b);
+        rVertices.push_back(v_4b);
+        rVertices.push_back(v_5b);
+        rVertices.push_back(v_6b);
+    }
+
 
     unsigned int i = 0;
 
@@ -557,10 +701,12 @@ QuadtreeRenderer::update_vbo(glm::vec2 screen_pos){
 
     glGenVertexArrays(1, &m_vao);
     glBindVertexArray(m_vao);
-
-    GLuint vbo;
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        
+    if (m_vbo)
+        glDeleteBuffers(1, &m_vbo);
+    
+    glGenBuffers(1, &m_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
 
     glBufferData(GL_ARRAY_BUFFER, sizeof(float)* 6 * m_cubeVertices.size()
         , m_cubeVertices.data(), GL_STATIC_DRAW);
@@ -577,12 +723,33 @@ QuadtreeRenderer::update_vbo(glm::vec2 screen_pos){
     glGenVertexArrays(1, &m_vao_p);
     glBindVertexArray(m_vao_p);
     
-    GLuint vbo_p;
-    glGenBuffers(1, &vbo_p);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_p);
+    if (m_vbo_p)
+        glDeleteBuffers(1, &m_vbo_p);
+    glGenBuffers(1, &m_vbo_p);
+    glBindBuffer(GL_ARRAY_BUFFER, m_vbo_p);
 
     glBufferData(GL_ARRAY_BUFFER, sizeof(float)* 6 * pVertices.size()
-        , pVertices.data(), GL_STATIC_DRAW);
+        ,pVertices.data() , GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), nullptr);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_TRUE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+    glBindVertexArray(0);
+
+    if (m_vao_r)
+        glDeleteBuffers(1, &m_vao_r);
+
+    glGenVertexArrays(1, &m_vao_r);
+    glBindVertexArray(m_vao_r);
+
+    if (m_vbo_r)
+        glDeleteBuffers(1, &m_vbo_r);
+    glGenBuffers(1, &m_vbo_r);
+    glBindBuffer(GL_ARRAY_BUFFER, m_vbo_r);
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float)* 6 * rVertices.size()
+        , rVertices.data(), GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
@@ -607,14 +774,31 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
         
     glm::vec4 screen_pos_trans = glm::inverse(model) * glm::vec4(screen_pos, 0.0f, 1.0f);
 
+    m_camera_point = screen_pos;
+    m_camera_point_trans = glm::vec2(screen_pos_trans.x, screen_pos_trans.y);
+
+    auto lin1trans = (glm::inverse(model) * glm::vec4(m_restriction_line[0], 0.0f, 1.0f));
+    m_restriction_line_trans[0] = glm::vec2(lin1trans.x, lin1trans.y);
+    auto lin2trans = (glm::inverse(model) * glm::vec4(m_restriction_line[1], 0.0f, 1.0f));
+    m_restriction_line_trans[1] = glm::vec2(lin2trans.x, lin2trans.y);
+
+    auto frus1trans = (glm::inverse(model) * glm::vec4(m_frustrum_points[0], 0.0f, 1.0f));
+    m_frustrum_points_trans[0] = glm::vec2(frus1trans.x, frus1trans.y);
+    auto frus2trans = (glm::inverse(model) * glm::vec4(m_frustrum_points[1], 0.0f, 1.0f));
+    m_frustrum_points_trans[1] = glm::vec2(frus2trans.x, frus2trans.y);
+
+    auto testtrans = (glm::inverse(model) * glm::vec4(m_test_point, 0.0f, 1.0f));
+    m_test_point_trans = glm::vec2(testtrans.x, testtrans.y);
+
     //std::cout << std::endl
     //std::cout << screen_pos.x << " " << screen_pos.y << std::endl;
     //std::cout << screen_pos_trans.x << " " << screen_pos_trans.y << std::endl;
     
-    update_tree(glm::vec2(screen_pos_trans.x, screen_pos_trans.y));
+    update_tree();
     //update_tree(screen_pos);
-    update_vbo(screen_pos);
+    update_vbo();
         
+
     
     glUseProgram(m_program_id);
     glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Projection"), 1, GL_FALSE,
@@ -627,18 +811,31 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
     glBindVertexArray(0);
 
     glUseProgram(0);
-
-
+        
     glUseProgram(m_program_id);
     glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Projection"), 1, GL_FALSE,
         glm::value_ptr(projection));
     glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Modelview"), 1, GL_FALSE,
         glm::value_ptr(glm::mat4()));
 
-    glBindVertexArray(m_vao_p);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glBindVertexArray(m_vao_r);
+    glDrawArrays(GL_LINES, 0, 6);
     glBindVertexArray(0);
 
     glUseProgram(0);
-    
+
+    glPointSize(30.0);
+
+    glUseProgram(m_program_id);
+    glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Projection"), 1, GL_FALSE,
+        glm::value_ptr(projection));
+    glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Modelview"), 1, GL_FALSE,
+        glm::value_ptr(view));
+
+    glBindVertexArray(m_vao_p);
+    glDrawArrays(GL_POINTS, 0, 6);
+    glBindVertexArray(0);
+
+    glUseProgram(0);
+
 }
