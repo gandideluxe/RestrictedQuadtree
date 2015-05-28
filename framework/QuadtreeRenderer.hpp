@@ -8,6 +8,7 @@
 #include <queue>
 #include <algorithm>
 #include <functional>
+#include <memory>
 
 #include <quadtree_layout.h>
 
@@ -60,12 +61,13 @@ public:
     public:
         ~q_node(){
             for (unsigned c = 0; c != CHILDREN; ++c){
-                delete child_node[c];
+                if (child_node[c]){
+                    delete child_node[c];
+                }
             }
         };
 
-        unsigned node_id;
-        bool root;
+        unsigned node_id;        
         bool leaf;
         unsigned depth;
         float importance;
@@ -76,9 +78,14 @@ public:
 
         q_tree_ptr tree;
 
-        q_node(){
-            root = false;
-            leaf = true;
+        q_node(){            
+            leaf = false;
+            depth = 0;
+            importance = 0.0;
+            error = 0.0;
+            priority = 0.0;
+
+            parent = nullptr;
 
             for (unsigned c = 0; c != CHILDREN; ++c){
                 child_node[c] = nullptr;
@@ -134,12 +141,18 @@ private:
 
     void split_node(q_node_ptr n);
     void collapse_node(q_node_ptr n);
-    bool splitable(q_node_ptr n);
-    bool collabsible(q_node_ptr n);
+    bool splitable(q_node_ptr n) const;
+    bool collabsible(q_node_ptr n) const;
+
+    std::map<unsigned, q_node_ptr> get_all_current_leafs(QuadtreeRenderer::q_tree_ptr tree) const;
 
     q_node_ptr get_neighbour_node(const q_node_ptr n, const q_tree_ptr tree, const unsigned neighbour_nbr) const;
     bool check_neighbours_for_level_div(const q_node_ptr n, const float level_div) const;
-
+    void generate_ideal_tree(q_tree_ptr src, q_tree_ptr dst);
+    void copy_tree(q_tree_ptr src, q_tree_ptr dst);
+    void collapse_negative_nodes(q_tree_ptr t);
+    void optimize_tree(q_tree_ptr t);
+    
     void update_vbo();
     void update_tree();
     void update_priorities(q_tree_ptr m_tree, glm::vec2 pos);
@@ -169,6 +182,9 @@ private:
 
     glm::vec2         m_test_point;
     glm::vec2         m_test_point_trans;
+
+    glm::mat4         m_model;
+    glm::mat4         m_model_inverse;
     
     q_tree_ptr m_tree_ideal;
     q_tree_ptr m_tree_current;

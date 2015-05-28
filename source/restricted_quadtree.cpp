@@ -144,7 +144,7 @@ int g_bilinear_interpolation = true;
 
 glm::vec2 g_test_point = glm::vec2(0.3f, 0.3f);
 
-glm::vec2 g_ref_point = glm::vec2(0.5f, 0.5f);
+glm::vec2 g_ref_point = glm::vec2(0.5f, 0.0f);
 glm::vec2 g_frustrum_points[2] = { glm::vec2(0.2f, 0.8f), glm::vec2(0.7f, 0.7f) };
 
 glm::vec2 g_restriction_line[2] = { glm::vec2(0.4f, 0.4f), glm::vec2(0.5f, 0.5f) };
