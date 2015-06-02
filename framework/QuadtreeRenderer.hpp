@@ -146,8 +146,10 @@ private:
 
     std::map<unsigned, q_node_ptr> get_all_current_leafs(QuadtreeRenderer::q_tree_ptr tree) const;
 
-    q_node_ptr get_neighbour_node(const q_node_ptr n, const q_tree_ptr tree, const unsigned neighbour_nbr) const;
-    bool check_neighbours_for_level_div(const q_node_ptr n, const float level_div) const;
+    q_node_ptr get_neighbor_node(const q_node_ptr n, const q_tree_ptr tree, const unsigned neighbor_nbr) const;
+    std::vector<q_node_ptr> check_neighbors_for_level_div(const q_node_ptr n, const float level_div) const;
+    std::vector<q_node_ptr> check_neighbors_for_split(const q_node_ptr n) const;
+    std::vector<q_node_ptr> check_neighbors_for_merge(const q_node_ptr n) const;
     void generate_ideal_tree(q_tree_ptr src, q_tree_ptr dst);
     void copy_tree(q_tree_ptr src, q_tree_ptr dst);
     void collapse_negative_nodes(q_tree_ptr t);
