@@ -59,7 +59,7 @@ GLuint createProgram(std::string const& v, std::string const& f)
 }
 
 GLuint updateTexture2D(GLuint tex, unsigned const& width, unsigned const& height,
-    const char* data)
+    const char* data, const GLenum& pixel_format, const GLenum& type)
 {
     GLuint error = glGetError();
 
@@ -74,27 +74,26 @@ GLuint updateTexture2D(GLuint tex, unsigned const& width, unsigned const& height
     //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     error = glGetError();
     if (error != GL_NO_ERROR)
     {
         std::cout << "OpenGL Error glTexParameteri: " << error << std::endl;
     }
 
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, pixel_format, type, data);
     error = glGetError();
     if (error != GL_NO_ERROR)
     {
-        std::cout << "OpenGL Error glTexImage2D: " << error << std::endl;
+        std::cout << "OpenGL Error glTexSubImage2D: " << error << std::endl;
     }
     glBindTexture(GL_TEXTURE_2D, 0);
 
     return tex;
 }
 
-GLuint createTexture2D(unsigned const& width, unsigned const& height,
-    const char* data)
+GLuint createTexture2D(unsigned const& width, unsigned const& height, const char* data, const GLenum& internal_pixel_format, const GLenum& pixel_format, const GLenum& type)
 {
   GLuint tex;
   glGenTextures(1, &tex);
@@ -106,8 +105,8 @@ GLuint createTexture2D(unsigned const& width, unsigned const& height,
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA,
-      GL_UNSIGNED_BYTE, data);
+  glTexImage2D(GL_TEXTURE_2D, 0, pixel_format, width, height, 0, pixel_format,
+      type, data);
   
   //glBindTexture(GL_TEXTURE_2D, 0);
 

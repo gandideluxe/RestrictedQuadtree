@@ -33,9 +33,9 @@ inline std::string readFile(std::string const& file)
 GLuint loadShader(GLenum type, std::string const& s);
 GLuint createProgram(std::string const& v, std::string const& f);
 GLuint updateTexture2D(unsigned const texture_id, unsigned const& width, unsigned const& height,
-    const char* data);
+    const char* data, const GLenum& format, const GLenum& type);
 GLuint createTexture2D(unsigned const& width, unsigned const& height,
-    const char* data);
+    const char* data, const GLenum& internal_format, const GLenum& format, const GLenum& type);
 GLuint createTexture3D(unsigned const& width, unsigned const& height,
     unsigned const& depth, unsigned const channel_size,
     unsigned const channel_count, const char* data);

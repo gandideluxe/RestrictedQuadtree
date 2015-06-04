@@ -106,6 +106,8 @@ public:
         bool strict;
         
         std::vector<q_node_ptr> qtree_index_data;
+        std::vector<char> qtree_depth_data; //visulizing only
+        std::vector<unsigned> qtree_id_data; //visulizing only
     };
             
 public:
@@ -161,16 +163,28 @@ private:
 
     bool check_frustrum(glm::vec2 pos) const;
 
+    unsigned int      m_tree_resolution;
+
     unsigned int      m_program_id;
+    unsigned int      m_program_texture_id;
     
-    unsigned int      m_vao;    
+    unsigned int      m_vao;
+    unsigned int      m_vao_i;
+
     unsigned int      m_vao_p;
     unsigned int      m_vao_r;
 
     unsigned int      m_vbo;
+    unsigned int      m_vbo_i;
+
     unsigned int      m_vbo_p;
     unsigned int      m_vbo_r;
 
+    unsigned int      m_texture_id_current;
+    unsigned int      m_texture_id_ideal;
+    unsigned int      m_vao_quad;
+    unsigned int      m_vbo_quad;
+    
     bool              m_restriction;
     glm::vec2         m_restriction_line[2];
     glm::vec2         m_restriction_line_trans[2];
@@ -192,6 +206,8 @@ private:
     q_tree_ptr m_tree_current;
 
     std::vector<QuadtreeRenderer::Vertex> m_cubeVertices;
+    std::vector<QuadtreeRenderer::Vertex> m_cubeVertices_i;
+    std::vector<glm::vec3> m_quadVertices;
 
     bool              m_dirty;
 
