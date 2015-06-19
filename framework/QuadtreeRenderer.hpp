@@ -107,7 +107,7 @@ public:
         
         std::vector<q_node_ptr> qtree_index_data;
         std::vector<char> qtree_depth_data; //visulizing only
-        std::vector<unsigned> qtree_id_data; //visulizing only
+        std::vector<int> qtree_id_data; //visulizing only
     };
             
 public:

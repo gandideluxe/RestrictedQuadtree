@@ -105,10 +105,17 @@ GLuint createTexture2D(unsigned const& width, unsigned const& height, const char
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-  glTexImage2D(GL_TEXTURE_2D, 0, pixel_format, width, height, 0, pixel_format,
+  glTexImage2D(GL_TEXTURE_2D, 0, internal_pixel_format, width, height, 0, pixel_format,
       type, data);
   
-  //glBindTexture(GL_TEXTURE_2D, 0);
+  GLint error = glGetError();
+  if (error != GL_NO_ERROR)
+  {
+      std::cout << "OpenGL Error createTexture2D: " << error << std::endl;
+  }
+  glBindTexture(GL_TEXTURE_2D, 0);
+
+  glBindTexture(GL_TEXTURE_2D, 0);
 
   return tex;
 }
