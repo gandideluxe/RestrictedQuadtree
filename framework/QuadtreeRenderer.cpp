@@ -73,12 +73,12 @@ layout(location = 0) out vec4 FragColor;\n\
 \n\
 void main()\n\
 {\n\
-vec4 color = texture( Texture, vec2(vtexturePos.x, 1.0 - vtexturePos.y)) * 20.0;\n\
-//color.r = int(color.r * 40.0)%1;\n\
-//color.g = int(color.r * 20.0)%3;\n\
-//color.b = int(color.r * 30.0)%4;\n\
-//FragColor = texture(Texture, vec2(vtexturePos.x, 1.0 - vtexturePos.y)) * 10.0; \n\
-color.a = 1.0;\n\
+vec4 color = texture( Texture, vec2(vtexturePos.x, 1.0 - vtexturePos.y));\n\
+if(length(color) == 0.0) \n\
+color = vec4(1.0, 0.0, 0.0, 1.0); \n\
+else \n\
+color = color * 100000.0; \n\
+color.a = 1.0; \n\
 FragColor = color;\n\
 }\n\
 ";
@@ -290,16 +290,16 @@ m_dirty(true)
     m_texture_id_current = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&(m_tree_current->qtree_index_data[0]), GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
     glActiveTexture(GL_TEXTURE1);
     m_texture_id_ideal = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&(m_tree_ideal->qtree_index_data[0]), GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE);
-#elif 1
+#elif 0
     glActiveTexture(GL_TEXTURE0);
     m_texture_id_current = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_depth_data[0], GL_R8, GL_RED, GL_UNSIGNED_BYTE);
     glActiveTexture(GL_TEXTURE1);
     m_texture_id_ideal = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_depth_data[0], GL_R8, GL_RED, GL_UNSIGNED_BYTE);
 #else
     glActiveTexture(GL_TEXTURE0);
-    m_texture_id_current = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_id_data[0], GL_R32I, GL_RED_INTEGER, GL_INT);
+    m_texture_id_current = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_id_data[0], GL_R32I, GL_RED, GL_INT);
     glActiveTexture(GL_TEXTURE1);
-    m_texture_id_ideal = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_id_data[0], GL_R32I, GL_RED_INTEGER, GL_INT);
+    m_texture_id_ideal = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_id_data[0], GL_R32I, GL_RED, GL_INT);
 #endif
                 
 }
@@ -1528,16 +1528,19 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
     updateTexture2D(m_texture_id_current, m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_index_data[0], GL_RGBA, GL_UNSIGNED_BYTE);
     glActiveTexture(GL_TEXTURE1);
     updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_index_data[0], GL_RGBA, GL_UNSIGNED_BYTE);
-#elif 1
+#elif 0
     glActiveTexture(GL_TEXTURE0);
     updateTexture2D(m_texture_id_current, m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_depth_data[0], GL_RED, GL_UNSIGNED_BYTE);
     glActiveTexture(GL_TEXTURE1);
     updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_depth_data[0], GL_RED, GL_UNSIGNED_BYTE);
 #else
+
+    std::vector<int> test_data(m_tree_ideal->qtree_id_data.size(), 1);
+    
     glActiveTexture(GL_TEXTURE0);
-    updateTexture2D(m_texture_id_current, m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_id_data[0], GL_RED_INTEGER, GL_INT);
+    updateTexture2D(m_texture_id_current, m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_id_data[0], GL_RED, GL_INT);
     glActiveTexture(GL_TEXTURE1);
-    updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_id_data[0], GL_RED_INTEGER, GL_INT);
+    updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)(&test_data[0])/*(char*)&m_tree_ideal->qtree_id_data[0]*/, GL_RED, GL_INT);
 #endif
 
 #if 1
@@ -1558,7 +1561,8 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
 
     glBindTexture(GL_TEXTURE_2D, 0);
 #endif
-#if 0
+    glm::mat4 model_s = glm::translate(glm::vec3(0.05f, 0.15f, 0.0f))* glm::scale(glm::vec3(0.2f, 0.2f * ratio, 1.0));
+#if 1
 
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, m_texture_id_ideal);
@@ -1566,7 +1570,7 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
     glUniformMatrix4fv(glGetUniformLocation(m_program_texture_id, "Projection"), 1, GL_FALSE,
         glm::value_ptr(projection));
     glUniformMatrix4fv(glGetUniformLocation(m_program_texture_id, "Modelview"), 1, GL_FALSE,
-        glm::value_ptr(view));
+        glm::value_ptr(model_s));
     glUniform1i(glGetUniformLocation(m_program_texture_id, "Texture"), 1);
 
     glBindVertexArray(m_vao_quad);
@@ -1591,7 +1595,7 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
     glUseProgram(0);
 
 
-    glm::mat4 model_s = glm::translate(glm::vec3(0.05f, 0.15f, 0.0f))* glm::scale(glm::vec3(0.2f, 0.2f * ratio, 1.0));    
+    
     glUseProgram(m_program_id);
     glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Projection"), 1, GL_FALSE,
         glm::value_ptr(projection));

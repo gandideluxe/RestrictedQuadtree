@@ -114,9 +114,7 @@ GLuint createTexture2D(unsigned const& width, unsigned const& height, const char
       std::cout << "OpenGL Error createTexture2D: " << error << std::endl;
   }
   glBindTexture(GL_TEXTURE_2D, 0);
-
-  glBindTexture(GL_TEXTURE_2D, 0);
-
+  
   return tex;
 }
 
