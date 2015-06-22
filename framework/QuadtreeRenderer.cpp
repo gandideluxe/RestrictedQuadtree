@@ -74,124 +74,10 @@ layout(location = 0) out vec4 FragColor;\n\
 void main()\n\
 {\n\
 vec4 color = texture( Texture, vec2(vtexturePos.x, 1.0 - vtexturePos.y));\n\
-if(length(color) == 0.0) \n\
-color = vec4(1.0, 0.0, 0.0, 1.0); \n\
-else \n\
-color = color * 100000.0; \n\
 color.a = 1.0; \n\
 FragColor = color;\n\
 }\n\
 ";
-
-
-namespace helper {
-
-    template<typename T>
-    const T clamp(const T val, const T min, const T max)
-    {
-        return ((val > max) ? max : (val < min) ? min : val);
-    }
-
-    template<typename T>
-    const T weight(const float w, const T a, const T b)
-    {
-        return ((1.0 - w) * a + w * b);
-    }
-
-    ///////////////////////////////////////////////////////////////////////
-    float Gamma = 0.80;
-    float IntensityMax = 255.0;
-
-    ///////////////////////////////////////////////////////////////////////
-    float round(float d){
-        return floor(d + 0.5);
-    }
-
-    ///////////////////////////////////////////////////////////////////////
-    float Adjust(float Color, float Factor){
-        if (Color == 0.0){
-            return 0.0;
-        }
-        else{
-            float res = round(IntensityMax * pow(Color * Factor, Gamma));
-            return glm::min(255.0f, glm::max(0.0f, res));
-        }
-    }
-
-    ///////////////////////////////////////////////////////////////////////
-    glm::vec3 WavelengthToRGB(float Wavelength)
-    {
-        float Blue;
-        float factor;
-        float Green;
-        float Red;
-
-        if (380.0 <= Wavelength && Wavelength <= 440.0){
-            Red = -(Wavelength - 440.0) / (440.0 - 380.0);
-            Green = 0.0;
-            Blue = 1.0;
-        }
-        else if (440.0 < Wavelength && Wavelength <= 490.0){
-            Red = 0.0;
-            Green = (Wavelength - 440.0) / (490.0 - 440.0);
-            Blue = 1.0;
-        }
-        else if (490.0 < Wavelength && Wavelength <= 510.0){
-            Red = 0.0;
-            Green = 1.0;
-            Blue = -(Wavelength - 510.0) / (510.0 - 490.0);
-        }
-        else if (510.0 < Wavelength && Wavelength <= 580.0){
-            Red = (Wavelength - 510.0) / (580.0 - 510.0);
-            Green = 1.0;
-            Blue = 0.0;
-        }
-        else if (580.0 < Wavelength && Wavelength <= 645.0){
-            Red = 1.0;
-            Green = -(Wavelength - 645.0) / (645.0 - 580.0);
-            Blue = 0.0;
-        }
-        else if (645.0 < Wavelength && Wavelength <= 780.0){
-            Red = 1.0;
-            Green = 0.0;
-            Blue = 0.0;
-        }
-        else{
-            Red = 0.0;
-            Green = 0.0;
-            Blue = 0.0;
-        }
-
-
-        if (380.0 <= Wavelength && Wavelength <= 420.0){
-            factor = 0.3 + 0.7*(Wavelength - 380.0) / (420.0 - 380.0);
-        }
-        else if (420.0 < Wavelength && Wavelength <= 701.0){
-            factor = 1.0;
-        }
-        else if (701.0 < Wavelength && Wavelength <= 780.0){
-            factor = 0.3 + 0.7*(780.0 - Wavelength) / (780.0 - 701.0);
-        }
-        else{
-            factor = 0.0;
-        }
-        float R = Adjust(Red, factor);
-        float G = Adjust(Green, factor);
-        float B = Adjust(Blue, factor);
-        return glm::vec3(R / 255.0, G / 255.0, B / 255.0);
-    }
-
-    ///////////////////////////////////////////////////////////////////////
-    float GetWaveLengthFromDataPoint(float Value, float MinValue, float MaxValue)
-    {
-        float MinVisibleWavelength = 380.0;//350.0;
-        float MaxVisibleWavelength = 780.0;//650.0;
-        //Convert data value in the range of MinValues..MaxValues to the
-        //range 350..780
-        return (Value - MinValue) / (MaxValue - MinValue) * (MaxVisibleWavelength - MinVisibleWavelength) + MinVisibleWavelength;
-    }
-
-} // namespace helper
 
 QuadtreeRenderer::QuadtreeRenderer()
 : m_program_id(0),
@@ -210,8 +96,8 @@ m_dirty(true)
 
     m_tree_current->budget = 5000;
     m_tree_current->budget_filled = 0;
-    m_tree_current->frame_budget = 2;    
-    m_tree_current->max_depth = 6;
+    m_tree_current->frame_budget = 1;    
+    m_tree_current->max_depth = 5;
     
     m_tree_current->root_node = new q_node();
     m_tree_current->root_node->node_id = 0;
@@ -297,9 +183,9 @@ m_dirty(true)
     m_texture_id_ideal = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_depth_data[0], GL_R8, GL_RED, GL_UNSIGNED_BYTE);
 #else
     glActiveTexture(GL_TEXTURE0);
-    m_texture_id_current = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_id_data[0], GL_R32I, GL_RED, GL_INT);
+    m_texture_id_current = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_id_data[0], GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE);
     glActiveTexture(GL_TEXTURE1);
-    m_texture_id_ideal = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_id_data[0], GL_R32I, GL_RED, GL_INT);
+    m_texture_id_ideal = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_id_data[0], GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE);
 #endif
                 
 }
@@ -934,8 +820,10 @@ QuadtreeRenderer::optimize_tree(QuadtreeRenderer::q_tree_ptr t){
     }
 
     std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> colap_able_nodes_pq(colap_able_nodes.begin(), colap_able_nodes.end());
-    
+    unsigned current_splits = 0;
+
     while (!split_able_nodes_pq.empty()        
+        && m_tree_current->frame_budget > current_splits
         && m_tree_current->budget_filled < m_tree_current->budget){
 
         q_node_ptr q_split_node = split_able_nodes_pq.top();
@@ -944,14 +832,19 @@ QuadtreeRenderer::optimize_tree(QuadtreeRenderer::q_tree_ptr t){
         auto p_nodes = check_neighbors_for_split(q_split_node);
         std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> split_able_nodes_forced_pq(p_nodes.begin(), p_nodes.end());
 
-        if (p_nodes.empty()
+
+
+        if (p_nodes.empty()      
+            && m_tree_current->frame_budget > current_splits
             && q_split_node->error > 0.4){
-            split_node(q_split_node);            
+            split_node(q_split_node);    
+            ++current_splits;
         }
         else{
             if (!split_able_nodes_forced_pq.empty()){
                 while (!split_able_nodes_forced_pq.empty()
-                    && m_tree_current->budget_filled < m_tree_current->budget){
+                    && m_tree_current->budget_filled < m_tree_current->budget
+                    && m_tree_current->frame_budget > current_splits){
                     
                     q_node_ptr q_split_node = split_able_nodes_forced_pq.top();
                     
@@ -966,12 +859,13 @@ QuadtreeRenderer::optimize_tree(QuadtreeRenderer::q_tree_ptr t){
                     if (stack_size == split_able_nodes_forced_pq.size()){
                         split_able_nodes_forced_pq.pop();
                         split_node(q_split_node);
+                        ++current_splits;
                     }
                 }
             }
         }
     }
-    
+ 
     //while (!split_able_nodes_pq.empty()
     //    && !colap_able_nodes_pq.empty()
     //    && colap_able_nodes_pq.top()->priority < split_able_nodes_pq.top()->priority){
@@ -1009,7 +903,7 @@ QuadtreeRenderer::generate_ideal_tree(QuadtreeRenderer::q_tree_ptr src, Quadtree
     
     copy_tree(src, dst);
 
-    collapse_negative_nodes(dst);
+    //collapse_negative_nodes(dst);
 
     optimize_tree(dst);
     
@@ -1067,7 +961,7 @@ QuadtreeRenderer::update_tree(){
     //    q_node_ptr q_split_node = split_able_nodes_pq.top();
     //    split_able_nodes_pq.pop();
     //    
-    //    if (check_neighbors_for_level_div(q_split_node, 1.0f)
+    //    if (check_neighbors_for_level_div(q_split_node, 1.0f).size() > 0
     //        && q_split_node->error > 0.8){
 
     //        split_node(q_split_node);
@@ -1534,13 +1428,14 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
     glActiveTexture(GL_TEXTURE1);
     updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_depth_data[0], GL_RED, GL_UNSIGNED_BYTE);
 #else
-
-    std::vector<int> test_data(m_tree_ideal->qtree_id_data.size(), 1);
     
+    auto data_current = m_tree_current->get_id_data_rgb();
+    //auto data_ideal = m_tree_ideal->get_id_data_rgb();
+
     glActiveTexture(GL_TEXTURE0);
-    updateTexture2D(m_texture_id_current, m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_id_data[0], GL_RED, GL_INT);
-    glActiveTexture(GL_TEXTURE1);
-    updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)(&test_data[0])/*(char*)&m_tree_ideal->qtree_id_data[0]*/, GL_RED, GL_INT);
+    updateTexture2D(m_texture_id_current, m_tree_resolution, m_tree_resolution, (char*)&data_current[0], GL_RGB, GL_UNSIGNED_BYTE);
+    //glActiveTexture(GL_TEXTURE1);
+    //updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)&data_ideal[0], GL_RGB, GL_UNSIGNED_BYTE);
 #endif
 
 #if 1
@@ -1633,7 +1528,5 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
     glBindVertexArray(0);
 
     glUseProgram(0);
-
-
 
 }
