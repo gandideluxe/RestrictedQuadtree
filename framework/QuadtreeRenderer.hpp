@@ -291,7 +291,8 @@ private:
     void generate_ideal_tree(q_tree_ptr src, q_tree_ptr dst);
     void copy_tree(q_tree_ptr src, q_tree_ptr dst);
     void collapse_negative_nodes(q_tree_ptr t);
-    void optimize_tree(q_tree_ptr t);
+    void optimize_current_tree(q_tree_ptr src, q_tree_ptr dst);
+    void optimize_ideal_tree(q_tree_ptr t);
     
     void update_vbo();
     void update_tree();
