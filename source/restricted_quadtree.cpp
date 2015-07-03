@@ -86,7 +86,7 @@ std::string g_file_string = "../../../data/head_w256_h256_d225_c1_b8.raw";
 
 
 // set backgorund color here
-glm::vec3   g_background_color = glm::vec3(0.0f, 0.0f, 0.0f);   //grey
+glm::vec3   g_background_color = glm::vec3(1.0f, 1.0f, 1.0f);   //grey
 
 Window g_win(g_window_res);
 
@@ -144,8 +144,8 @@ int g_bilinear_interpolation = true;
 
 glm::vec2 g_test_point = glm::vec2(0.3f, 0.3f);
 
-glm::vec2 g_ref_point = glm::vec2(0.5f, 0.0f);
-glm::vec2 g_frustrum_points[2] = { glm::vec2(0.2f, 0.8f), glm::vec2(0.7f, 0.7f) };
+glm::vec2 g_ref_point = glm::vec2(0.5f, 0.2f);
+glm::vec2 g_frustrum_points[2] = { glm::vec2(0.4f, 0.8f), glm::vec2(0.7f, 0.7f) };
 
 glm::vec2 g_restriction_line[2] = { glm::vec2(0.4f, 0.4f), glm::vec2(0.5f, 0.5f) };
 bool      g_restriction_direction = true;
@@ -469,11 +469,21 @@ void showGUI(){
         ImGui::Separator();
         ImGui::Text(std::string("Reference Dim: ").append(std::to_string(q_renderer.m_treeInfo.ref_dim.x)).append(" ").append(std::to_string(q_renderer.m_treeInfo.ref_dim.y)).c_str());
         ImGui::Text(std::string("Page Dim: ").append(std::to_string(q_renderer.m_treeInfo.page_dim.x)).append(" ").append(std::to_string(q_renderer.m_treeInfo.page_dim.y)).c_str());
+        ImGui::Text(std::string("Screen Pos      : ").append(std::to_string(q_renderer.m_treeInfo.ref_pos.x)).append(" ").append(std::to_string(q_renderer.m_treeInfo.ref_pos.y)).c_str());
+        ImGui::Text(std::string("Screen Pos Trans: ").append(std::to_string(q_renderer.m_treeInfo.ref_pos_trans.x)).append(" ").append(std::to_string(q_renderer.m_treeInfo.ref_pos_trans.y)).c_str());
+        
         ImGui::Separator();
         ImGui::Text(std::string("max  Budget: ").append(std::to_string(q_renderer.m_treeInfo.max_budget)).c_str());
         ImGui::Text(std::string("used Budget: ").append(std::to_string(q_renderer.m_treeInfo.used_budget)).c_str());
+        ImGui::Text(std::string("used ideal Budget: ").append(std::to_string(q_renderer.m_treeInfo.used_ideal_budget)).c_str());
         ImGui::Separator();
         ImGui::Text(std::string("Global Error: ").append(std::to_string(q_renderer.m_treeInfo.global_error)).c_str());
+        ImGui::Separator();
+        ImGui::Text(std::string("Min Prio: ").append(std::to_string(q_renderer.m_treeInfo.min_prio)).c_str());
+        ImGui::Text(std::string("Max Prio: ").append(std::to_string(q_renderer.m_treeInfo.max_prio)).c_str());
+        
+        
+        
         if (q_renderer.m_treeInfo.global_error_difference <= 0.0)
             ImGui::TextColored(ImVec4(0.0, 1.0, 0.0, 1.0), std::string("Global Error Difference: ").append(std::to_string(q_renderer.m_treeInfo.global_error_difference)).c_str());
         else

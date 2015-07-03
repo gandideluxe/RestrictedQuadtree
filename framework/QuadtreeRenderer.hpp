@@ -145,12 +145,16 @@ public:
     struct TreeInfo{
         unsigned max_budget;
         unsigned used_budget;
+        unsigned used_ideal_budget;
 
         size_t memory_usage;
 
         float puffer_size;
 
         unsigned max_depth;
+
+        float min_prio;
+        float max_prio;
         
         size_t time_new_tree_update;
         size_t time_current_tree_update;
@@ -158,9 +162,12 @@ public:
         glm::uvec2 page_dim;
         glm::uvec2 ref_dim;
 
+        glm::vec2 ref_pos;
+        glm::vec2 ref_pos_trans;
+
         float global_error;
         float global_error_difference;
-    
+            
     } m_treeInfo;
 
     struct Vertex{
@@ -256,6 +263,8 @@ public:
     void set_frustum(glm::vec2 camera_point, glm::vec2 restriction_line[2]);
     void set_test_point(glm::vec2 test_point);
     void update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_dim);
+
+
     
     struct greater_prio_ptr : public std::binary_function<QuadtreeRenderer::q_node_ptr,
         QuadtreeRenderer::q_node_ptr, bool>
@@ -284,10 +293,15 @@ private:
 
     std::map<unsigned, q_node_ptr> get_all_current_leafs(QuadtreeRenderer::q_tree_ptr tree) const;
 
+    std::vector<q_node_ptr> get_splitable_nodes(QuadtreeRenderer::q_tree_ptr t) const;
+    std::vector<q_node_ptr> get_collabsible_nodes(QuadtreeRenderer::q_tree_ptr t) const;
+    std::vector<q_node_ptr> get_leaf_nodes(QuadtreeRenderer::q_tree_ptr t) const;
+
     q_node_ptr get_neighbor_node(const q_node_ptr n, const q_tree_ptr tree, const unsigned neighbor_nbr) const;
     std::vector<q_node_ptr> check_neighbors_for_level_div(const q_node_ptr n, const float level_div) const;
     std::vector<q_node_ptr> check_neighbors_for_split(const q_node_ptr n) const;
     std::vector<q_node_ptr> check_neighbors_for_merge(const q_node_ptr n) const;
+    std::vector<q_node_ptr> check_neighbors_for_restricted(const q_node_ptr n) const;
     void generate_ideal_tree(q_tree_ptr src, q_tree_ptr dst);
     void copy_tree(q_tree_ptr src, q_tree_ptr dst);
     void collapse_negative_nodes(q_tree_ptr t);
@@ -295,8 +309,10 @@ private:
     void optimize_ideal_tree(q_tree_ptr t);
     
     void update_vbo();
-    void update_tree();
-    void update_priorities(q_tree_ptr m_tree, glm::vec2 pos);
+    void update_tree();    
+    void update_priorities(q_tree_ptr m_tree);
+    float get_importance_of_node(q_node_ptr n) const;
+    float get_error_of_node(q_node_ptr n) const;
 
     bool check_frustrum(glm::vec2 pos) const;
 
