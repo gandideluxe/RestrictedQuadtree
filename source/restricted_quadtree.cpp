@@ -20,6 +20,8 @@
 #include <algorithm>
 #include <stdexcept>
 #include <cmath>
+#include <chrono>
+#include <thread>
 
 ///GLM INCLUDES
 #define GLM_FORCE_RADIANS
@@ -717,6 +719,8 @@ int main(int argc, char* argv[])
 
         glBindTexture(GL_TEXTURE_2D, 0);
         g_win.update();
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     }
 

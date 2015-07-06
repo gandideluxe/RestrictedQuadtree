@@ -179,10 +179,13 @@ public:
 
     public:
         ~q_node(){
+            // done in cleanup of cleaunp container
             for (unsigned c = 0; c != CHILDREN; ++c){
-                if (child_node[c]){
-                    delete child_node[c];
-                }
+                //parent->child_node[c] = nullptr;
+                //if (child_node[c]){
+                //    delete child_node[c];
+                //    child_node[c] = nullptr;
+                //}
             }
         };
 
@@ -197,12 +200,15 @@ public:
 
         q_tree_ptr tree;
 
+        bool valid;
+
         q_node(){            
             leaf = false;
             depth = 0;
             importance = 0.0;
             error = 0.0;
             priority = 0.0;
+            valid = true;
 
             parent = nullptr;
 
@@ -304,6 +310,7 @@ private:
     std::vector<q_node_ptr> check_neighbors_for_collapse(const q_node_ptr n) const;
     std::vector<q_node_ptr> check_neighbors_for_restricted(const q_node_ptr n) const;
     void generate_ideal_tree(q_tree_ptr src, q_tree_ptr dst);
+    void init_tree(q_tree_ptr dst);
     void copy_tree(q_tree_ptr src, q_tree_ptr dst);
     void collapse_negative_nodes(q_tree_ptr t);
     void optimize_current_tree(q_tree_ptr src, q_tree_ptr dst);
@@ -321,6 +328,7 @@ private:
     bool check_frustrum(glm::vec2 pos) const;
 
     bool is_node_inside_tree(q_node_ptr node, q_tree_ptr tree);
+    bool is_child_node_inside_tree(q_node_ptr node, q_tree_ptr tree);
 
     unsigned int      m_tree_resolution;
 
@@ -371,6 +379,8 @@ private:
     bool              m_dirty;
 
     scm::data::quadtree_layout q_layout;
+
+    std::vector<q_node_ptr> cleanup_container;
 };
 
 
