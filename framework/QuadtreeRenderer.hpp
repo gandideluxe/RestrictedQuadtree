@@ -296,11 +296,12 @@ private:
     std::vector<q_node_ptr> get_splitable_nodes(QuadtreeRenderer::q_tree_ptr t) const;
     std::vector<q_node_ptr> get_collabsible_nodes(QuadtreeRenderer::q_tree_ptr t) const;
     std::vector<q_node_ptr> get_leaf_nodes(QuadtreeRenderer::q_tree_ptr t) const;
+    std::vector<q_node_ptr> get_leaf_nodes_with_depth_outside(QuadtreeRenderer::q_tree_ptr t, const unsigned depth) const;
 
     q_node_ptr get_neighbor_node(const q_node_ptr n, const q_tree_ptr tree, const unsigned neighbor_nbr) const;
     std::vector<q_node_ptr> check_neighbors_for_level_div(const q_node_ptr n, const float level_div) const;
     std::vector<q_node_ptr> check_neighbors_for_split(const q_node_ptr n) const;
-    std::vector<q_node_ptr> check_neighbors_for_merge(const q_node_ptr n) const;
+    std::vector<q_node_ptr> check_neighbors_for_collapse(const q_node_ptr n) const;
     std::vector<q_node_ptr> check_neighbors_for_restricted(const q_node_ptr n) const;
     void generate_ideal_tree(q_tree_ptr src, q_tree_ptr dst);
     void copy_tree(q_tree_ptr src, q_tree_ptr dst);
@@ -311,10 +312,15 @@ private:
     void update_vbo();
     void update_tree();    
     void update_priorities(q_tree_ptr m_tree);
+    void set_max_neigbor_priorities(q_tree_ptr m_tree);
+    
     float get_importance_of_node(q_node_ptr n) const;
     float get_error_of_node(q_node_ptr n) const;
 
+    bool check_frustrum(q_node_ptr pos) const;
     bool check_frustrum(glm::vec2 pos) const;
+
+    bool is_node_inside_tree(q_node_ptr node, q_tree_ptr tree);
 
     unsigned int      m_tree_resolution;
 

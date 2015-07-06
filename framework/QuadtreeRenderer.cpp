@@ -94,10 +94,10 @@ m_dirty(true)
 
     m_tree_current = new q_tree();
 
-    m_tree_current->budget = 20;
+    m_tree_current->budget = 200;
     m_tree_current->budget_filled = 0;
     m_tree_current->frame_budget = 1;    
-    m_tree_current->max_depth = 2;
+    m_tree_current->max_depth = 5;
     
     m_tree_current->root_node = new q_node();
     m_tree_current->root_node->node_id = 0;
@@ -216,6 +216,47 @@ QuadtreeRenderer::set_test_point(glm::vec2 test_point)
     m_test_point = test_point;    
 }
 
+
+
+bool
+QuadtreeRenderer::check_frustrum(QuadtreeRenderer::q_node_ptr n) const
+{
+    auto pos = q_layout.node_position(n->node_id);
+    auto node_level = q_layout.level_index(n->node_id);
+    auto total_node_index = q_layout.total_node_count(node_level);
+
+    auto max_pos = q_layout.node_position(total_node_index - 1);
+
+    auto v_pos = glm::vec2((float)pos.x / (max_pos.x + 1.0), (float)pos.y / (max_pos.y + 1.0));
+    auto v_length = 1.0 / (max_pos.x + 1);
+
+    glm::vec2 vpos1 = v_pos;
+    glm::vec2 vpos2 = glm::vec2(v_pos.x + v_length, v_pos.y);
+    glm::vec2 vpos3 = glm::vec2(v_pos.x + v_length, v_pos.y + v_length);
+    glm::vec2 vpos4 = glm::vec2(v_pos.x, v_pos.y + v_length);
+
+    glm::vec4 trans = m_model * glm::vec4(vpos1, 0.0f, 1.0f);
+    glm::vec2 trans1 = glm::vec2(trans.x, trans.y);
+
+    trans = m_model * glm::vec4(vpos2, 0.0f, 1.0f);
+    glm::vec2 trans2 = glm::vec2(trans.x, trans.y);
+
+    trans = m_model * glm::vec4(vpos3, 0.0f, 1.0f);
+    glm::vec2 trans3 = glm::vec2(trans.x, trans.y);
+
+    trans = m_model * glm::vec4(vpos4, 0.0f, 1.0f);
+    glm::vec2 trans4 = glm::vec2(trans.x, trans.y);
+
+    if (!(check_frustrum(trans1)
+        || check_frustrum(trans2)
+        || check_frustrum(trans3)
+        || check_frustrum(trans4)
+        )){
+
+        return false;
+    }
+    return true;
+}
 
 bool
 QuadtreeRenderer::check_frustrum(glm::vec2 pos) const
@@ -510,7 +551,7 @@ QuadtreeRenderer::check_neighbors_for_split(const QuadtreeRenderer::q_node_ptr n
 }
 
 std::vector<QuadtreeRenderer::q_node_ptr>
-QuadtreeRenderer::check_neighbors_for_merge(const QuadtreeRenderer::q_node_ptr n) const
+QuadtreeRenderer::check_neighbors_for_collapse(const QuadtreeRenderer::q_node_ptr n) const
 {
     //std::cout << "!" << std::endl;
 
@@ -556,21 +597,30 @@ float
 QuadtreeRenderer::get_importance_of_node(q_node_ptr n) const
 {
 
-    auto pos = q_layout.node_position(n->node_id);
+    auto pos = glm::vec2(q_layout.node_position(n->node_id)) + glm::vec2(0.5);
     auto node_level = q_layout.level_index(n->node_id);
     auto total_node_index = q_layout.total_node_count(node_level);
 
-    glm::vec2 max_pos = q_layout.node_position(total_node_index - 1);
+    size_t max_nodes_finest_level = q_layout.total_node_count_level(n->depth);
+    auto resolution = (size_t)glm::sqrt((float)max_nodes_finest_level);
 
-    auto v_pos = glm::vec2((float)pos.x / (max_pos.x + 1.0), (float)pos.y / (max_pos.y + 1.0));
-    auto v_length = 1.0 / (max_pos.x + 1);
+    auto camera_pos = (float)resolution * glm::vec2(m_camera_point_trans.x, m_camera_point_trans.y);
 
-    auto ref_pos = glm::vec2(v_pos.x + v_length * 0.5f, v_pos.y + v_length * 0.5f);
+    auto l = glm::length(glm::vec2(pos.x, pos.y) - camera_pos) + 1.0;
 
-    auto depth = n->depth + 1;
-    auto l = glm::length(ref_pos - m_camera_point_trans);
-    //auto importance = 1.0f / std::max(l, 0.001f);
-    auto importance = 1.0f / l;
+    //std::cout << "camera_pos: " << camera_pos.x << ", " << camera_pos.y << " node_pos: " << pos.x << ", " << pos.y << " length: " << l << std::endl;
+        
+    //glm::vec2 max_pos = q_layout.node_position(total_node_index - 1);
+
+    //auto v_pos = glm::vec2((float)pos.x / (max_pos.x + 1.0), (float)pos.y / (max_pos.y + 1.0));
+    //auto v_length = 1.0 / (max_pos.x + 1);
+
+    //auto ref_pos = glm::vec2(v_pos.x + v_length * 0.5f, v_pos.y + v_length * 0.5f);
+
+    //auto depth = n->depth + 1;
+    //auto l = glm::length(ref_pos - m_camera_point_trans) + 1.0;
+    ////auto importance = 1.0f / std::max(l, 0.001f);
+    auto importance = 1.0f / (l);
 
 //    return 1.0f;
     return importance;
@@ -609,15 +659,15 @@ QuadtreeRenderer::get_error_of_node(q_node_ptr n) const
     
     float error = 0.0;
 
-    //if (!(check_frustrum(trans1)
-    //    || check_frustrum(trans2)
-    //    || check_frustrum(trans3)
-    //    || check_frustrum(trans4)
-    //    )){
+    if (!(check_frustrum(trans1)
+        || check_frustrum(trans2)
+        || check_frustrum(trans3)
+        || check_frustrum(trans4)
+        )){
 
-    //    error = 0.0;
-    //}
-    //else
+        error = -1.0;
+    }
+    else
     {
         auto depth = n->depth + 1;
 
@@ -625,7 +675,7 @@ QuadtreeRenderer::get_error_of_node(q_node_ptr n) const
 
         error = local_error;
     }
-    return 1.0f;
+    //return 1.0f;
     return error;
 
 }
@@ -674,6 +724,28 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
     m_treeInfo.global_error = global_error;
 }
 
+
+void
+QuadtreeRenderer::set_max_neigbor_priorities(QuadtreeRenderer::q_tree_ptr tree){
+
+
+    for (auto d = tree->max_depth; d != 0; --d){
+        auto leaf_nodes = get_leaf_nodes_with_depth_outside(tree, d);
+
+        for (auto n : leaf_nodes){
+            //set_priority_to_neighbor_max(n);
+            for (unsigned n_nbr = 0; n_nbr != (NEIGHBORS + NEIGHBORS / 2); ++n_nbr){
+                auto neighbor = get_neighbor_node(n, n->tree, n_nbr);
+
+                if (neighbor)
+                {
+                    n->priority = glm::max(n->priority, neighbor->priority);
+                }
+            }
+        }
+    }
+
+}
 
 std::map<unsigned, QuadtreeRenderer::q_node_ptr>
 QuadtreeRenderer::get_all_current_leafs(QuadtreeRenderer::q_tree_ptr tree) const
@@ -843,9 +915,9 @@ QuadtreeRenderer::collapse_negative_nodes(QuadtreeRenderer::q_tree_ptr t){
             auto current_canidate = collapsible_node_stack.top();
             collapsible_node_stack.pop();
 
-            if (current_canidate->priority < 0.3){
+            if (current_canidate->priority < 0.1){
                 if (collabsible(current_canidate)){
-                    auto p_nodes = check_neighbors_for_merge(current_canidate);
+                    auto p_nodes = check_neighbors_for_collapse(current_canidate);
                     if (p_nodes.empty()){
                         collapse_node(current_canidate);
                         if (collabsible(current_canidate->parent)){
@@ -940,6 +1012,34 @@ QuadtreeRenderer::get_leaf_nodes(QuadtreeRenderer::q_tree_ptr t) const
     return leaf_nodes;
 }
 
+std::vector<QuadtreeRenderer::q_node_ptr>
+QuadtreeRenderer::get_leaf_nodes_with_depth_outside(QuadtreeRenderer::q_tree_ptr t, const unsigned depth) const
+{
+    std::vector<q_node_ptr> leaf_nodes;
+    std::stack<q_node_ptr> node_stack;
+    node_stack.push(t->root_node);
+
+    q_node_ptr current_node;
+
+    while (!node_stack.empty()){
+        current_node = node_stack.top();
+        node_stack.pop();
+
+        if (!current_node->leaf){
+            for (unsigned c = 0; c != CHILDREN; ++c){
+                if (current_node->child_node[c]){
+                    node_stack.push(current_node->child_node[c]);
+                }
+            }
+        }
+        else{
+            if (current_node->depth == depth && check_frustrum(current_node))
+                leaf_nodes.push_back(current_node);
+        }
+    }
+    return leaf_nodes;
+}
+
 
 void
 QuadtreeRenderer::optimize_ideal_tree(QuadtreeRenderer::q_tree_ptr t){
@@ -948,18 +1048,17 @@ QuadtreeRenderer::optimize_ideal_tree(QuadtreeRenderer::q_tree_ptr t){
     std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, greater_prio_ptr> split_able_nodes_pq(split_able_nodes.begin(), split_able_nodes.end());
         
     /// split to ideal
-    while (!split_able_nodes_pq.empty()){
+    while (!split_able_nodes_pq.empty()
+        /*&& t->budget_filled < t->budget * 8*/){
 
         q_node_ptr q_split_node = split_able_nodes_pq.top();
         split_able_nodes_pq.pop();
 
-        if (q_split_node->error > 0.0
-            && splitable(q_split_node)){
+        if (splitable(q_split_node)){
             //if (t->budget_filled < t->budget - CHILDREN){
                 split_node(q_split_node);  
                 for (unsigned c = 0; c != CHILDREN; ++c){
                     if (q_split_node->child_node[c])
-
                        split_able_nodes_pq.push(q_split_node->child_node[c]);
                 }
             //}            
@@ -967,8 +1066,7 @@ QuadtreeRenderer::optimize_ideal_tree(QuadtreeRenderer::q_tree_ptr t){
     }
 
 
-    // split to restricted
-    
+    // split to restricted    
     std::vector<q_node_ptr> leaf_nodes = get_leaf_nodes(t);
     std::stack<q_node_ptr> leafs_stacked;
 
@@ -1008,45 +1106,63 @@ QuadtreeRenderer::optimize_ideal_tree(QuadtreeRenderer::q_tree_ptr t){
     }
 
     
-    //// collapse to restriction
-  /*  std::vector<q_node_ptr> colap_able_nodes = get_collabsible_nodes(t);
-    std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, greater_prio_ptr> colap_able_nodes_pq(colap_able_nodes.begin(), colap_able_nodes.end());
-
-    std::vector<q_node_ptr> tmp_missed_able_nodes;
-    tmp_missed_able_nodes.clear();
-
     while (t->budget_filled > t->budget){
-        
-        if (colap_able_nodes_pq.empty()){
-            for (auto n : tmp_missed_able_nodes){
-                colap_able_nodes_pq.push(n);
-            }
-            tmp_missed_able_nodes.clear();
-        }
-        
-        auto col_candi = colap_able_nodes_pq.top();
-        colap_able_nodes_pq.pop();
-                
-        if (collabsible(col_candi)){
+        //// collapse to restriction
+        std::vector<q_node_ptr> colap_able_nodes = get_collabsible_nodes(t);
+        std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, greater_prio_ptr> colap_able_nodes_pq(colap_able_nodes.begin(), colap_able_nodes.end());
 
-            auto rest_coll_nodes = check_neighbors_for_merge(col_candi);
+        std::vector<q_node_ptr> tmp_missed_able_nodes;
+        tmp_missed_able_nodes.clear();
 
-            if (rest_coll_nodes.empty()){
-                collapse_node(col_candi);
-                colap_able_nodes_pq.push(col_candi->parent);
-            }
-            else{
-                tmp_missed_able_nodes.push_back(col_candi);
+        bool coll_found = false;
+
+        while (t->budget_filled > t->budget
+            && !colap_able_nodes.empty()
+            && !(coll_found/* && !tmp_missed_able_nodes.empty()*/)){
+
+            auto col_candi = colap_able_nodes_pq.top();
+            colap_able_nodes_pq.pop();
+
+            if (collabsible(col_candi)){
+
+                auto rest_coll_nodes = check_neighbors_for_collapse(col_candi);
+
+                if (rest_coll_nodes.empty()){
+                    coll_found = true;
+                    collapse_node(col_candi);
+                    colap_able_nodes_pq.push(col_candi->parent);
+                }
+                else{
+                    tmp_missed_able_nodes.push_back(col_candi);
+                }
             }
         }
-        
-    }*/
-    
+    }    
 }
 
 
+bool 
+QuadtreeRenderer::is_node_inside_tree(q_node_ptr node, q_tree_ptr tree){
+
+    size_t max_nodes_finest_level = q_layout.total_node_count_level(tree->max_depth);
+    auto nodes_on_lvl = q_layout.total_node_count_level(node->depth);
+    auto one_node_to_finest = glm::sqrt((float)max_nodes_finest_level / nodes_on_lvl);
+    auto node_pos = q_layout.node_position(node->node_id);
+    auto resolution = (size_t)glm::sqrt((float)max_nodes_finest_level);
+    
+    size_t index = (node_pos.x * one_node_to_finest) + (resolution - 1 - ((node_pos.y) * one_node_to_finest)) * resolution;
+    
+    if (tree->qtree_index_data[index]->depth >= node->depth){
+        return true;
+    }
+
+    return false;
+}
+
 void
 QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current, QuadtreeRenderer::q_tree_ptr ideal){
+    
+    set_max_neigbor_priorities(current);
 
     std::vector<q_node_ptr> split_able_nodes;
     std::vector<q_node_ptr> colap_able_nodes;
@@ -1076,6 +1192,8 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current, Qu
 
     std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> split_able_nodes_pq(split_able_nodes.begin(), split_able_nodes.end());
 
+    node_stack.push(current->root_node);
+
     while (!node_stack.empty()){
         current_node = node_stack.top();
         node_stack.pop();
@@ -1094,39 +1212,50 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current, Qu
 
     std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> colap_able_nodes_pq(colap_able_nodes.begin(), colap_able_nodes.end());
 
-    while (!split_able_nodes_pq.empty()
-        && m_tree_current->budget_filled < m_tree_current->budget){
+    unsigned split_counter = 0;
+    bool collapse_possible = true;
+    
+    while (!split_able_nodes_pq.empty()       
+        && split_counter < m_tree_current->frame_budget
+        && collapse_possible){
 
-        q_node_ptr q_split_node = split_able_nodes_pq.top();
-        split_able_nodes_pq.pop();
+        bool collapsed = false;
 
-        auto p_nodes = check_neighbors_for_split(q_split_node);
-        std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> split_able_nodes_forced_pq(p_nodes.begin(), p_nodes.end());
+        if (m_tree_current->budget_filled + CHILDREN > m_tree_current->budget)
+        {
+            while (!collapsed 
+                && !colap_able_nodes_pq.empty()){
+                
+                q_node_ptr q_collapse_node = colap_able_nodes_pq.top();
+                colap_able_nodes_pq.pop();
 
-        if (p_nodes.empty()
-            && q_split_node->error > 0.4){
-            split_node(q_split_node);
-        }
-        else{
-            if (!split_able_nodes_forced_pq.empty()){
-                while (!split_able_nodes_forced_pq.empty()
-                    && m_tree_current->budget_filled < m_tree_current->budget){
-
-                    q_node_ptr q_split_node = split_able_nodes_forced_pq.top();
-
-                    auto pn_nodes = check_neighbors_for_split(q_split_node);
-
-                    auto stack_size = split_able_nodes_forced_pq.size();
-
-                    for (auto n : pn_nodes){
-                        split_able_nodes_forced_pq.push(n);
-                    }
-
-                    if (stack_size == split_able_nodes_forced_pq.size()){
-                        split_able_nodes_forced_pq.pop();
-                        split_node(q_split_node);
+                if (is_node_inside_tree(q_collapse_node, m_tree_ideal)){
+                    auto l = check_neighbors_for_collapse(q_collapse_node);
+                    if (l.empty()){
+                        collapse_node(q_collapse_node);
+                        collapsed = true;
                     }
                 }
+            }        
+
+            if (!collapsed){
+                collapse_possible = false;
+            }
+        }
+        else{
+            collapsed = true;
+        }
+        
+        q_node_ptr q_split_node = split_able_nodes_pq.top();
+        split_able_nodes_pq.pop();
+        
+        if (is_node_inside_tree(q_split_node, m_tree_ideal)){
+
+            auto p_nodes = check_neighbors_for_split(q_split_node);
+
+            if (p_nodes.empty()){
+                split_node(q_split_node);
+                ++split_counter;
             }
         }
     }
@@ -1149,7 +1278,7 @@ QuadtreeRenderer::update_tree(){
 
     update_priorities(m_tree_current);
 
-    delete m_tree_ideal->root_node;
+    //delete m_tree_ideal->root_node;
     
     generate_ideal_tree(m_tree_current, m_tree_ideal);
     optimize_current_tree(m_tree_current, m_tree_ideal);
@@ -1160,55 +1289,6 @@ QuadtreeRenderer::update_tree(){
     m_treeInfo.used_budget = m_tree_current->budget_filled;
     m_treeInfo.used_ideal_budget = m_tree_ideal->budget_filled;
     
-    //std::cout << "?" << std::endl;
-    //std::vector<q_node_ptr> split_able_nodes;
-    //std::vector<q_node_ptr> coll_able_nodes;
-
-    //std::stack<q_node_ptr> node_stack;
-
-    //node_stack.push(m_tree_current->root_node);
-
-    //q_node_ptr current_node;
-    //
-    //while (!node_stack.empty()){
-    //    current_node = node_stack.top();
-    //    node_stack.pop();
-
-    //    if (!current_node->leaf){
-    //        for (unsigned c = 0; c != CHILDREN; ++c){
-    //            if (current_node->child_node[c]){
-    //                node_stack.push(current_node->child_node[c]);
-    //            }
-    //        }
-    //    }
-    //    else{
-    //        if (splitable(current_node))
-    //            split_able_nodes.push_back(current_node);
-    //    }
-    //}
-    //    
-    //std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> split_able_nodes_pq(split_able_nodes.begin(), split_able_nodes.end());
-    //std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, greater_prio_ptr> coll_able_nodes_pq(coll_able_nodes.begin(), coll_able_nodes.end());
-
-    //unsigned current_budget = 0;
-        
-    //while (!split_able_nodes_pq.empty()
-    //    && current_budget < m_tree_current->frame_budget 
-    //    && m_tree_current->budget_filled < m_tree_current->budget){
-
-    //    q_node_ptr q_split_node = split_able_nodes_pq.top();
-    //    split_able_nodes_pq.pop();
-    //    
-    //    if (check_neighbors_for_level_div(q_split_node, 1.0f).size() > 0
-    //        && q_split_node->error > 0.8){
-
-    //        split_node(q_split_node);
-    //        ++current_budget;            
-    //    }
-    //}
-
-
-
 }
 
 void
@@ -1248,6 +1328,10 @@ QuadtreeRenderer::update_vbo(){
         //std::cout << std::endl;
         unsigned counter = 0u;
 
+
+        m_treeInfo.min_prio = 9999.99;
+        m_treeInfo.max_prio = -9999.99;
+
         for (auto l = leafs.begin(); l != leafs.end(); ++l){
             ++counter;
 
@@ -1257,8 +1341,13 @@ QuadtreeRenderer::update_vbo(){
 
             auto max_pos = q_layout.node_position(total_node_index - 1);
             
-            m_treeInfo.ref_pos_trans.x = m_camera_point_trans.x * max_pos.x;
-            m_treeInfo.ref_pos_trans.y = m_camera_point_trans.y * max_pos.y;
+            //m_treeInfo.ref_pos_trans.x = m_camera_point_trans.x * max_pos.x;
+            //m_treeInfo.ref_pos_trans.y = m_camera_point_trans.y * max_pos.y;
+
+            size_t max_nodes_finest_level = q_layout.total_node_count_level((*l)->tree->max_depth);
+            auto resolution = (size_t)glm::sqrt((float)max_nodes_finest_level);
+            auto camera_pos = (float)resolution * m_camera_point_trans;
+            m_treeInfo.ref_pos_trans = camera_pos;
 
             //std::cout << "NodeId: " << (*l)->node_id << " px: " << (float)pos.x / (max_pos.x + 1.0) << " py: " << (float)pos.y / (max_pos.y + 1.0) << " level: " << q_layout.level_index((*l)->node_id) << std::endl;
 
@@ -1276,13 +1365,14 @@ QuadtreeRenderer::update_vbo(){
             glm::vec4 trans = m_model * glm::vec4(v_pos, 0.0f, 1.0f);
             glm::vec2 trans2 = glm::vec2(trans.x, trans.y);
 
-            m_treeInfo.min_prio = 9999.99;
-            m_treeInfo.max_prio = -9999.99;
 
             m_treeInfo.min_prio = std::min((*l)->priority, m_treeInfo.min_prio);
             m_treeInfo.max_prio = std::max((*l)->priority, m_treeInfo.max_prio);
             
             glm::vec3 color = helper::WavelengthToRGB(helper::GetWaveLengthFromDataPoint((*l)->priority, m_treeInfo.min_prio, m_treeInfo.max_prio));// glm::vec3(0.0f, 1.0f, 0.0f);
+            auto t_g = color.g;
+            color.g = color.b;
+            color.b = t_g;
 
             //color = glm::vec3(1.0f, 0.0f, 0.0f);
             //if (!check_frustrum(glm::vec2(v_pos.x, v_pos.y)))
@@ -1380,6 +1470,7 @@ QuadtreeRenderer::update_vbo(){
             QuadtreeRenderer::Vertex v_4b;
 
             float error = (*l)->error;
+            float depth = (*l)->depth;
             //std::cout << error << std::endl;
 
             glm::vec4 trans = m_model * glm::vec4(v_pos, 0.0f, 1.0f);
@@ -1388,11 +1479,15 @@ QuadtreeRenderer::update_vbo(){
             m_treeInfo.min_prio = std::min((*l)->priority, m_treeInfo.min_prio);
             m_treeInfo.max_prio = std::max((*l)->priority, m_treeInfo.max_prio);
 
-            if (pos.x < 0.5 && pos.y < 0.5){
-                std::cout << "x: " << pos.x << " y: " << pos.y << " p: "  <<(*l)->priority << std::endl;
-            }
+            //if (pos.x < 0.5 && pos.y < 0.5){
+            //    std::cout << "x: " << pos.x << " y: " << pos.y << " p: "  <<(*l)->priority << std::endl;
+            //}
 
-            glm::vec3 color = helper::WavelengthToRGB(helper::GetWaveLengthFromDataPoint((*l)->priority, m_treeInfo.min_prio, m_treeInfo.max_prio));// glm::vec3(0.0f, 1.0f, 0.0f);
+            glm::vec3 color = helper::WavelengthToRGB(helper::GetWaveLengthFromDataPoint((*l)->priority, 0.0, 1.2));// glm::vec3(0.0f, 1.0f, 0.0f);
+            //glm::vec3 color = helper::WavelengthToRGB(helper::GetWaveLengthFromDataPoint((float)(*l)->depth, 0.0, 6.0));// glm::vec3(0.0f, 1.0f, 0.0f);
+            auto t_g = color.g;
+            color.g = color.b;
+            color.b = t_g;
             //color = glm::vec3(1.0f, 0.0f, 0.0f);
             //if (!check_frustrum(glm::vec2(v_pos.x, v_pos.y)))
             //if (!check_frustrum(trans2))
