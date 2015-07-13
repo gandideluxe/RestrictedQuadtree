@@ -239,21 +239,6 @@ public:
             rgb_index_data.resize(qtree_id_data.size() * 3);
 
             auto counter = 0;
-            for (auto i : qtree_id_data){
-                                
-                //std::cout << "ID: " << i << " Depth: " << (unsigned)qtree_depth_data[counter] << std::endl;
-                srand(1);
-                srand(i * 4 * rand());
-                unsigned blub = rand() % budget;
-
-                auto color = helper::WavelengthToRGB(helper::GetWaveLengthFromDataPoint((float)blub, -1.0f, (float)budget));
-
-                rgb_index_data[counter * 3 + 0] = ((unsigned char)(color.r * 255.0));
-                rgb_index_data[counter * 3 + 1] = ((unsigned char)(color.g * 255.0));
-                rgb_index_data[counter * 3 + 2] = ((unsigned char)(color.b * 255.0));
-                ++counter;
-            }
-
             return rgb_index_data;
         }
         

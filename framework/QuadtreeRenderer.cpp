@@ -94,7 +94,7 @@ m_dirty(true)
 
     m_tree_current = new q_tree();
 
-    m_tree_current->budget = 400;
+    m_tree_current->budget = 20;
     m_tree_current->budget_filled = 0;
     m_tree_current->frame_budget = 1;
     m_tree_current->max_depth = 5;
@@ -873,9 +873,12 @@ QuadtreeRenderer::copy_tree(QuadtreeRenderer::q_tree_ptr src, QuadtreeRenderer::
 
     q_node_ptr current_node;
 
+    auto test_budget = 0;
+
     while (!node_stack.empty()){
         current_node = node_stack.top();
         node_stack.pop();
+        ++test_budget;
 
         for (unsigned c = 0; c != CHILDREN; ++c){
             if (current_node->child_node[c]){
@@ -886,7 +889,10 @@ QuadtreeRenderer::copy_tree(QuadtreeRenderer::q_tree_ptr src, QuadtreeRenderer::
         }
     }
 
-    dst->budget_filled = dst->budget_filled;
+    std::cout << test_budget << " " << src->budget_filled;
+
+    dst->budget = src->budget;
+    dst->budget_filled = src->budget_filled;
     dst->strict = true;
 
 }
@@ -1063,11 +1069,11 @@ void
 QuadtreeRenderer::optimize_ideal_tree(QuadtreeRenderer::q_tree_ptr t){
 
     std::vector<q_node_ptr> split_able_nodes = get_splitable_nodes(t);
-    std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, greater_prio_ptr> split_able_nodes_pq(split_able_nodes.begin(), split_able_nodes.end());
+    std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> split_able_nodes_pq(split_able_nodes.begin(), split_able_nodes.end());
 
     /// split to ideal
     while (!split_able_nodes_pq.empty()
-        /*&& t->budget_filled < t->budget * 8*/){
+        && t->budget_filled < t->budget /*m_tree_current->budget_filled + std::max(m_tree_current->frame_budget * 10, 400u)*/){
 
         q_node_ptr q_split_node = split_able_nodes_pq.top();
         split_able_nodes_pq.pop();
@@ -1262,12 +1268,12 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current, Qu
     bool collapse_possible = true;
 
     while (!split_able_nodes_pq.empty()
-        && split_counter < m_tree_current->frame_budget
+        && split_counter < current->frame_budget
         && collapse_possible){
 
         bool collapsed = false;
 
-        if (m_tree_current->budget_filled + CHILDREN > m_tree_current->budget)
+        if (current->budget_filled + CHILDREN > current->budget)
         {
             while (!collapsed
                 && !colap_able_nodes_pq.empty()){
@@ -1276,7 +1282,7 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current, Qu
                 colap_able_nodes_pq.pop();
 
                 if (collabsible(q_collapse_node)
-                    && !is_child_node_inside_tree(q_collapse_node, m_tree_ideal)){
+                    && !is_child_node_inside_tree(q_collapse_node, ideal)){
                     auto l = check_neighbors_for_collapse(q_collapse_node);
                     if (l.empty()){
                         collapse_node(q_collapse_node);
@@ -1297,7 +1303,7 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current, Qu
         split_able_nodes_pq.pop();
 
         if (splitable(q_split_node)
-            && is_node_inside_tree(q_split_node, m_tree_ideal)
+            && is_node_inside_tree(q_split_node, ideal)
             ){
 
             auto p_nodes = check_neighbors_for_split(q_split_node);
@@ -1333,15 +1339,13 @@ QuadtreeRenderer::update_tree(){
     generate_ideal_tree(m_tree_current, m_tree_ideal);
     optimize_current_tree(m_tree_current, m_tree_ideal);
 
-    m_tree_ideal->budget = m_tree_current->budget;
-    m_tree_ideal->budget_filled = m_tree_current->budget_filled;
-
     m_treeInfo.used_budget = m_tree_current->budget_filled;
     m_treeInfo.used_ideal_budget = m_tree_ideal->budget_filled;
 
     for (auto n : cleanup_container){
         delete n;
     }
+
     cleanup_container.clear();
 
 }
