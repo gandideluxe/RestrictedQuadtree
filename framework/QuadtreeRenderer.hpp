@@ -294,7 +294,7 @@ private:
     std::vector<q_node_ptr> check_neighbors_for_split(const q_node_ptr n) const;
     std::vector<q_node_ptr> check_neighbors_for_collapse(const q_node_ptr n) const;
     std::vector<q_node_ptr> check_neighbors_for_restricted(const q_node_ptr n) const;
-    void generate_ideal_tree(q_tree_ptr src, q_tree_ptr dst);
+    void generate_ideal_tree(const q_tree_ptr src, q_tree_ptr dst);
     void init_tree(q_tree_ptr dst);
     void copy_tree(q_tree_ptr src, q_tree_ptr dst);
     void collapse_negative_nodes(q_tree_ptr t);
@@ -353,6 +353,9 @@ private:
 
     glm::mat4         m_model;
     glm::mat4         m_model_inverse;
+
+    float m_min_prio;
+    float m_max_prio;
     
     q_tree_ptr m_tree_ideal;
     q_tree_ptr m_tree_current;

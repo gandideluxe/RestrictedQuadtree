@@ -89,12 +89,15 @@ m_vbo_p(0),
 m_vbo_r(0),
 m_dirty(true)
 {
+    m_treeInfo.min_prio = 9999.99;
+    m_treeInfo.max_prio = -9999.99;
+
     m_program_id = createProgram(quad_vertex_shader, quad_fragment_shader);
     m_program_texture_id = createProgram(quad_vertex_texture_shader, quad_fragment_texture_shader);
 
     m_tree_current = new q_tree();
 
-    m_tree_current->budget = 20;
+    m_tree_current->budget = 500;
     m_tree_current->budget_filled = 0;
     m_tree_current->frame_budget = 1;
     m_tree_current->max_depth = 5;
@@ -399,7 +402,9 @@ QuadtreeRenderer::collabsible(QuadtreeRenderer::q_node_ptr n) const{
     }
 
     for (unsigned c = 0; c != CHILDREN; ++c){
-        if (n->child_node[c] != nullptr && n->child_node[c]->valid != false && n->child_node[c]->leaf != true){
+        if (n->child_node[c] != nullptr 
+            && n->child_node[c]->valid == true 
+            && n->child_node[c]->leaf != true){
             return false;
         }
     }
@@ -885,11 +890,14 @@ QuadtreeRenderer::copy_tree(QuadtreeRenderer::q_tree_ptr src, QuadtreeRenderer::
                 current_node->child_node[c]->parent = current_node;
                 if (!current_node->child_node[c]->leaf)
                     node_stack.push(current_node->child_node[c]);
+                else{
+                    ++test_budget;
+                }
             }
         }
     }
 
-    std::cout << test_budget << " " << src->budget_filled;
+    //std::cout << test_budget << " " << src->budget_filled;
 
     dst->budget = src->budget;
     dst->budget_filled = src->budget_filled;
@@ -1073,7 +1081,7 @@ QuadtreeRenderer::optimize_ideal_tree(QuadtreeRenderer::q_tree_ptr t){
 
     /// split to ideal
     while (!split_able_nodes_pq.empty()
-        && t->budget_filled < t->budget /*m_tree_current->budget_filled + std::max(m_tree_current->frame_budget * 10, 400u)*/){
+        && t->budget_filled < m_tree_current->budget_filled + std::max(m_tree_current->frame_budget * 10, 100u)){
 
         q_node_ptr q_split_node = split_able_nodes_pq.top();
         split_able_nodes_pq.pop();
@@ -1088,55 +1096,64 @@ QuadtreeRenderer::optimize_ideal_tree(QuadtreeRenderer::q_tree_ptr t){
             //}            
         }
     }
-
-
+    
     // split to restricted    
-    std::vector<q_node_ptr> leaf_nodes = get_leaf_nodes(t);
-    std::stack<q_node_ptr> leafs_stacked;
+    bool was_strict = true;
+    while (was_strict){
+        std::vector<q_node_ptr> leaf_nodes = get_leaf_nodes(t);
+        std::stack<q_node_ptr> leafs_stacked;
 
-    for (auto l : leaf_nodes){
-        leafs_stacked.push(l);
-    }
-
-    size_t max_nodes_finest_level = q_layout.total_node_count_level(t->max_depth);
-    size_t ptr_index_dim = (size_t)std::sqrt((float)max_nodes_finest_level);
-
-    while (!leafs_stacked.empty()){
-
-        auto current_node_to_test = leafs_stacked.top();
-
-        while (!splitable(current_node_to_test) && leafs_stacked.empty()){
-            leafs_stacked.pop();
-            if (!leafs_stacked.empty())
-                current_node_to_test = leafs_stacked.top();
+        for (auto l : leaf_nodes){
+            leafs_stacked.push(l);
         }
 
-        auto coarse_neigbor_nodes = check_neighbors_for_restricted(current_node_to_test);
+        size_t max_nodes_finest_level = q_layout.total_node_count_level(t->max_depth);
+        size_t ptr_index_dim = (size_t)std::sqrt((float)max_nodes_finest_level);
 
-        if (!coarse_neigbor_nodes.empty()){
-            for (auto n : coarse_neigbor_nodes){
-                split_node(n);
-                for (auto nc : n->child_node){
-                    if (nc){
-                        leafs_stacked.push(nc);
+
+        while (!leafs_stacked.empty()){
+
+            auto current_node_to_test = leafs_stacked.top();
+
+            while (!splitable(current_node_to_test) && leafs_stacked.empty()){
+                leafs_stacked.pop();
+                if (!leafs_stacked.empty())
+                    current_node_to_test = leafs_stacked.top();
+            }
+
+            auto coarse_neigbor_nodes = check_neighbors_for_restricted(current_node_to_test);
+
+            if (!coarse_neigbor_nodes.empty()){
+                for (auto n : coarse_neigbor_nodes){
+                    if (splitable(n)){
+                        split_node(n);
+                        was_strict = false;
+                        for (auto nc : n->child_node){
+                            if (nc){
+                                leafs_stacked.push(nc);
+                            }
+                        }
                     }
                 }
             }
-        }
-        else{
-            if (!leafs_stacked.empty())
-                leafs_stacked.pop();
+            else{
+                if (!leafs_stacked.empty())
+                    leafs_stacked.pop();
+            }
         }
     }
-
+    //// collapse to restriction
 #if 1
-    while (t->budget_filled > t->budget){
-        //// collapse to restriction
+    unsigned debug_max_counter = 10000;
+    unsigned debug_counter = 0;
+
+    while (t->budget_filled > t->budget && debug_counter != debug_max_counter){
+        ++debug_counter;
         std::vector<q_node_ptr> colap_able_nodes = get_collabsible_nodes(t);
         std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, greater_prio_ptr> colap_able_nodes_pq(colap_able_nodes.begin(), colap_able_nodes.end());
 
-        std::vector<q_node_ptr> tmp_missed_able_nodes;
-        tmp_missed_able_nodes.clear();
+        //std::vector<q_node_ptr> tmp_missed_able_nodes;
+        //tmp_missed_able_nodes.clear();
 
         bool coll_found = false;
 
@@ -1156,11 +1173,15 @@ QuadtreeRenderer::optimize_ideal_tree(QuadtreeRenderer::q_tree_ptr t){
                     collapse_node(col_candi);
                     colap_able_nodes_pq.push(col_candi->parent);
                 }
-                else{
-                    tmp_missed_able_nodes.push_back(col_candi);
-                }
+                //else{
+                //    tmp_missed_able_nodes.push_back(col_candi);
+                //}
             }
         }
+    }
+
+    if (debug_counter == debug_max_counter){
+        std::cout << "DEBUG MAX COUNTER ERROR" << std::endl;
     }
 #endif
 }
@@ -1317,7 +1338,7 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current, Qu
 }
 
 void
-QuadtreeRenderer::generate_ideal_tree(QuadtreeRenderer::q_tree_ptr src, QuadtreeRenderer::q_tree_ptr dst){
+QuadtreeRenderer::generate_ideal_tree(const QuadtreeRenderer::q_tree_ptr src, QuadtreeRenderer::q_tree_ptr dst){
 
     copy_tree(src, dst);
     //init_tree(dst);
@@ -1388,8 +1409,7 @@ QuadtreeRenderer::update_vbo(){
         unsigned counter = 0u;
 
 
-        m_treeInfo.min_prio = 9999.99;
-        m_treeInfo.max_prio = -9999.99;
+
 
         for (auto l = leafs.begin(); l != leafs.end(); ++l){
             ++counter;
@@ -1508,9 +1528,7 @@ QuadtreeRenderer::update_vbo(){
         m_cubeVertices_i.clear();
         //std::cout << std::endl;
         unsigned counter = 0u;
-
-        std::cout << std::endl;
-
+        
         for (auto l = leafs.begin(); l != leafs.end(); ++l){
             ++counter;
 
