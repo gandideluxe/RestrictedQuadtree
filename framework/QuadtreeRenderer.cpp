@@ -1079,6 +1079,30 @@ QuadtreeRenderer::optimize_ideal_tree(QuadtreeRenderer::q_tree_ptr t){
     std::vector<q_node_ptr> split_able_nodes = get_splitable_nodes(t);
     std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> split_able_nodes_pq(split_able_nodes.begin(), split_able_nodes.end());
 
+
+#if 1
+    /// split to ideal
+
+    unsigned frame_budget = m_tree_current->frame_budget;
+
+    while (!split_able_nodes_pq.empty()
+        && t->budget_filled < m_tree_current->budget_filled + std::max(m_tree_current->frame_budget * 10, 100u)) {
+
+        q_node_ptr q_split_node = split_able_nodes_pq.top();
+        split_able_nodes_pq.pop();
+
+        if (splitable(q_split_node)) {
+            //if (t->budget_filled < t->budget - CHILDREN){
+            split_node(q_split_node);
+            for (unsigned c = 0; c != CHILDREN; ++c) {
+                if (q_split_node->child_node[c])
+                    split_able_nodes_pq.push(q_split_node->child_node[c]);
+            }
+            //}            
+        }
+    }
+
+#else
     /// split to ideal
     while (!split_able_nodes_pq.empty()
         && t->budget_filled < m_tree_current->budget_filled + std::max(m_tree_current->frame_budget * 10, 100u)){
@@ -1183,6 +1207,7 @@ QuadtreeRenderer::optimize_ideal_tree(QuadtreeRenderer::q_tree_ptr t){
     if (debug_counter == debug_max_counter){
         std::cout << "DEBUG MAX COUNTER ERROR" << std::endl;
     }
+#endif
 #endif
 }
 
@@ -1337,6 +1362,114 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current, Qu
     }
 }
 
+
+
+void
+QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
+
+    set_max_neigbor_priorities(current);
+
+    std::vector<q_node_ptr> split_able_nodes;
+    std::vector<q_node_ptr> colap_able_nodes;
+
+    std::stack<q_node_ptr> node_stack;
+
+    node_stack.push(current->root_node);
+
+    q_node_ptr current_node;
+
+    while (!node_stack.empty()){
+        current_node = node_stack.top();
+        node_stack.pop();
+
+        if (!current_node->leaf){
+            for (unsigned c = 0; c != CHILDREN; ++c){
+                if (current_node->child_node[c]){
+                    node_stack.push(current_node->child_node[c]);
+                }
+            }
+        }
+        else{
+            if (splitable(current_node))
+                split_able_nodes.push_back(current_node);
+        }
+    }
+
+    std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> split_able_nodes_pq(split_able_nodes.begin(), split_able_nodes.end());
+
+    node_stack.push(current->root_node);
+
+    while (!node_stack.empty()){
+        current_node = node_stack.top();
+        node_stack.pop();
+
+        if (!collabsible(current_node)){
+            for (unsigned c = 0; c != CHILDREN; ++c){
+                if (current_node->child_node[c]){
+                    node_stack.push(current_node->child_node[c]);
+                }
+            }
+        }
+        else{
+            colap_able_nodes.push_back(current_node);
+        }
+    }
+
+    std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, greater_prio_ptr> colap_able_nodes_pq(colap_able_nodes.begin(), colap_able_nodes.end());
+
+    unsigned split_counter = 0;
+    bool collapse_possible = true;
+
+    while (!split_able_nodes_pq.empty()
+        && split_counter < current->frame_budget
+        && collapse_possible){
+
+        bool collapsed = false;
+
+        if (current->budget_filled + CHILDREN > current->budget)
+        {
+            while (!collapsed
+                && !colap_able_nodes_pq.empty()){
+
+                q_node_ptr q_collapse_node = colap_able_nodes_pq.top();
+                colap_able_nodes_pq.pop();
+
+                if (collabsible(q_collapse_node)
+                    && !is_child_node_inside_tree(q_collapse_node, m_tree_ideal)){
+                    auto l = check_neighbors_for_collapse(q_collapse_node);
+                    if (l.empty()){
+                        collapse_node(q_collapse_node);
+                        collapsed = true;
+                    }
+                }
+            }
+
+            if (!collapsed){
+                collapse_possible = false;
+            }
+        }
+        else{
+            collapsed = true;
+        }
+
+        q_node_ptr q_split_node = split_able_nodes_pq.top();
+        split_able_nodes_pq.pop();
+
+        if (splitable(q_split_node)
+            && is_node_inside_tree(q_split_node, m_tree_ideal)
+            ){
+
+            auto p_nodes = check_neighbors_for_split(q_split_node);
+
+            if (p_nodes.empty()){
+                split_node(q_split_node);
+                ++split_counter;
+            }
+        }
+    }
+}
+
+
 void
 QuadtreeRenderer::generate_ideal_tree(const QuadtreeRenderer::q_tree_ptr src, QuadtreeRenderer::q_tree_ptr dst){
 
@@ -1358,7 +1491,8 @@ QuadtreeRenderer::update_tree(){
     //delete m_tree_ideal->root_node;
 
     generate_ideal_tree(m_tree_current, m_tree_ideal);
-    optimize_current_tree(m_tree_current, m_tree_ideal);
+    //optimize_current_tree(m_tree_current, m_tree_ideal);
+    optimize_current_tree(m_tree_current);
 
     m_treeInfo.used_budget = m_tree_current->budget_filled;
     m_treeInfo.used_ideal_budget = m_tree_ideal->budget_filled;

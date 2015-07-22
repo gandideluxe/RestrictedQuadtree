@@ -194,7 +194,8 @@ public:
         unsigned depth;
         float importance;
         float error;
-        float priority;         
+        float priority;
+        float updatet_priority;
         q_node_ptr parent;
         q_node_ptr child_node[CHILDREN];
 
@@ -298,6 +299,7 @@ private:
     void init_tree(q_tree_ptr dst);
     void copy_tree(q_tree_ptr src, q_tree_ptr dst);
     void collapse_negative_nodes(q_tree_ptr t);
+    void optimize_current_tree(q_tree_ptr src);
     void optimize_current_tree(q_tree_ptr src, q_tree_ptr dst);
     void optimize_ideal_tree(q_tree_ptr t);
     
