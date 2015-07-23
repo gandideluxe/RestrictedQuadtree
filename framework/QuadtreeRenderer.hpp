@@ -195,13 +195,14 @@ public:
         float importance;
         float error;
         float priority;
-        float updatet_priority;
+        float updated_priority;
         q_node_ptr parent;
         q_node_ptr child_node[CHILDREN];
 
         q_tree_ptr tree;
 
         bool valid;
+        bool dependend_mark;
 
         q_node(){            
             leaf = false;
@@ -210,6 +211,8 @@ public:
             error = 0.0;
             priority = 0.0;
             valid = true;
+
+            dependend_mark = false;
 
             parent = nullptr;
 
@@ -290,9 +293,12 @@ private:
     std::vector<q_node_ptr> get_leaf_nodes(QuadtreeRenderer::q_tree_ptr t) const;
     std::vector<q_node_ptr> get_leaf_nodes_with_depth_outside(QuadtreeRenderer::q_tree_ptr t, const unsigned depth) const;
 
+    void resolve_dependencies_priorities(const q_node_ptr n, int& counter);
+
     q_node_ptr get_neighbor_node(const q_node_ptr n, const q_tree_ptr tree, const unsigned neighbor_nbr) const;
     std::vector<q_node_ptr> check_neighbors_for_level_div(const q_node_ptr n, const float level_div) const;
     std::vector<q_node_ptr> check_neighbors_for_split(const q_node_ptr n) const;
+    std::vector<q_node_ptr> check_and_mark_neighbors_for_split(const q_node_ptr n);
     std::vector<q_node_ptr> check_neighbors_for_collapse(const q_node_ptr n) const;
     std::vector<q_node_ptr> check_neighbors_for_restricted(const q_node_ptr n) const;
     void generate_ideal_tree(const q_tree_ptr src, q_tree_ptr dst);

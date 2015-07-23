@@ -404,7 +404,8 @@ QuadtreeRenderer::collabsible(QuadtreeRenderer::q_node_ptr n) const{
     for (unsigned c = 0; c != CHILDREN; ++c){
         if (n->child_node[c] != nullptr 
             && n->child_node[c]->valid == true 
-            && n->child_node[c]->leaf != true){
+            && n->child_node[c]->leaf != true
+            && n->child_node[c]->dependend_mark != true){
             return false;
         }
     }
@@ -576,9 +577,31 @@ QuadtreeRenderer::check_neighbors_for_split(const QuadtreeRenderer::q_node_ptr n
     for (unsigned n_nbr = 0; n_nbr != NEIGHBORS; ++n_nbr){
         auto neighbor = get_neighbor_node(n, n->tree, n_nbr);
 
-        if (neighbor)
-        if (((int)n->depth - (int)neighbor->depth) >= 1.0){
-            p_nodes.push_back(neighbor);
+        if (neighbor){
+            if (((int)n->depth - (int)neighbor->depth) >= 1.0){
+                p_nodes.push_back(neighbor);
+            }
+        }
+    }
+
+    return p_nodes;
+}
+
+std::vector<QuadtreeRenderer::q_node_ptr>
+QuadtreeRenderer::check_and_mark_neighbors_for_split(const QuadtreeRenderer::q_node_ptr n)
+{
+    assert(n);
+
+    std::vector<q_node_ptr> p_nodes;
+
+    for (unsigned n_nbr = 0; n_nbr != NEIGHBORS; ++n_nbr) {
+        auto neighbor = get_neighbor_node(n, n->tree, n_nbr);
+
+        if (neighbor) {
+            neighbor->dependend_mark = true;
+            if (((int)n->depth - (int)neighbor->depth) >= 1.0) {
+                p_nodes.push_back(neighbor);
+            }
         }
     }
 
@@ -704,7 +727,34 @@ QuadtreeRenderer::get_error_of_node(q_node_ptr n) const
 }
 
 void
-QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
+QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr node, int& counter) {
+    
+    float eps = 0.0001;
+    
+    auto node_dependencies = check_neighbors_for_split(node);
+
+    //std::stack<q_node_ptr> node_stack;
+
+    for (auto n : node_dependencies) {
+        n->priority = node->priority + eps;
+        //node_stack.push(n);
+    }
+
+    while (!node_dependencies.empty() && counter != m_tree_current->frame_budget) {
+
+        auto current_node = *(node_dependencies.end() - 1);
+        node_dependencies.erase(node_dependencies.end() - 1);
+
+        resolve_dependencies_priorities(current_node, counter);
+    }
+
+    if (node_dependencies.empty()) {
+        ++counter;
+    }    
+}
+    
+    void
+    QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
 
     std::stack<q_node_ptr> node_stack;
 
@@ -745,6 +795,21 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
 
     m_treeInfo.global_error_difference = global_error - m_treeInfo.global_error;
     m_treeInfo.global_error = global_error;
+
+
+    //resolve dependencies
+    std::vector<q_node_ptr> split_able_nodes = get_splitable_nodes(tree);
+    std::sort(split_able_nodes.begin(), split_able_nodes.end());
+    //std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> split_able_nodes_pq(split_able_nodes.begin(), split_able_nodes.end());
+
+   int split_counter = 0;
+
+    while (!split_able_nodes.empty() && split_counter != m_tree_current->frame_budget) {
+        auto cur_top_node = *(split_able_nodes.end() - 1);
+        split_able_nodes.erase(split_able_nodes.end() - 1);
+        resolve_dependencies_priorities(cur_top_node, split_counter);        
+    }
+
 }
 
 
@@ -1367,55 +1432,56 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current, Qu
 void
 QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
 
-    set_max_neigbor_priorities(current);
 
-    std::vector<q_node_ptr> split_able_nodes;
-    std::vector<q_node_ptr> colap_able_nodes;
-
-    std::stack<q_node_ptr> node_stack;
-
-    node_stack.push(current->root_node);
-
-    q_node_ptr current_node;
-
-    while (!node_stack.empty()){
-        current_node = node_stack.top();
-        node_stack.pop();
-
-        if (!current_node->leaf){
-            for (unsigned c = 0; c != CHILDREN; ++c){
-                if (current_node->child_node[c]){
-                    node_stack.push(current_node->child_node[c]);
-                }
-            }
-        }
-        else{
-            if (splitable(current_node))
-                split_able_nodes.push_back(current_node);
-        }
-    }
+    auto split_able_nodes = get_splitable_nodes(current);
+    auto colap_able_nodes = get_collabsible_nodes(current);
 
     std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, lesser_prio_ptr> split_able_nodes_pq(split_able_nodes.begin(), split_able_nodes.end());
+    std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, greater_prio_ptr> colap_able_nodes_pq(colap_able_nodes.begin(), colap_able_nodes.end());
 
-    node_stack.push(current->root_node);
+    int split_counter = 0;
 
-    while (!node_stack.empty()){
-        current_node = node_stack.top();
-        node_stack.pop();
+    while (!split_able_nodes_pq.empty()
+        && split_counter < current->frame_budget) {
 
-        if (!collabsible(current_node)){
-            for (unsigned c = 0; c != CHILDREN; ++c){
-                if (current_node->child_node[c]){
-                    node_stack.push(current_node->child_node[c]);
+        auto curren_node = split_able_nodes_pq.top();
+        split_able_nodes_pq.pop();
+
+        if (current->budget > current->budget_filled) {
+            split_node(curren_node);
+        }
+        else {
+            bool collapsed = false;
+            auto curren_col_node = colap_able_nodes_pq.top();
+            while (!colap_able_nodes_pq.empty()
+                && curren_col_node->priority < curren_node->priority
+                && !collapsed) {
+                curren_col_node = colap_able_nodes_pq.top();
+                colap_able_nodes_pq.pop();
+
+                if (collabsible(curren_col_node)) {
+                    auto dependend_nodes = check_neighbors_for_collapse(curren_col_node);
+                    if (dependend_nodes.empty()) {
+                        collapse_node(curren_col_node);
+                        collapsed = true;
+                    }
                 }
             }
+
+            if(collapsed)
+                split_node(curren_node);
+            else
+                std::cout << "POOF" << std::endl;
+
         }
-        else{
-            colap_able_nodes.push_back(current_node);
-        }
+
     }
 
-    std::priority_queue<q_node_ptr, std::vector<q_node_ptr>, greater_prio_ptr> colap_able_nodes_pq(colap_able_nodes.begin(), colap_able_nodes.end());
+#if 1
+
+
+#else
+    set_max_neigbor_priorities(current);
 
     unsigned split_counter = 0;
     bool collapse_possible = true;
@@ -1467,6 +1533,7 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
             }
         }
     }
+#endif
 }
 
 
