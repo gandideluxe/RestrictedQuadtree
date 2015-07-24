@@ -405,7 +405,7 @@ QuadtreeRenderer::collabsible(QuadtreeRenderer::q_node_ptr n) const{
         if (n->child_node[c] != nullptr 
             && n->child_node[c]->valid == true 
             && n->child_node[c]->leaf != true
-            && n->child_node[c]->dependend_mark != true){
+            || n->child_node[c]->dependend_mark == true){
             return false;
         }
     }
@@ -598,11 +598,16 @@ QuadtreeRenderer::check_and_mark_neighbors_for_split(const QuadtreeRenderer::q_n
         auto neighbor = get_neighbor_node(n, n->tree, n_nbr);
 
         if (neighbor) {
-            neighbor->dependend_mark = true;
+            
             n->dependend_mark = true;
             if (((int)n->depth - (int)neighbor->depth) >= 1.0) {
                 p_nodes.push_back(neighbor);
+                neighbor->dependend_mark = true;
             }
+
+            /*if (((int)n->depth - (int)neighbor->depth) >= 0.0) {
+                neighbor->dependend_mark = true;
+            }*/
         }
     }
 
@@ -730,6 +735,9 @@ QuadtreeRenderer::get_error_of_node(q_node_ptr n) const
 void
 QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr node, int& counter) {
     
+    if (!splitable(node))
+        return;
+
     float eps = 0.0001;
     
     auto node_dependencies = check_and_mark_neighbors_for_split(node);
@@ -809,8 +817,9 @@ QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr n
 
    int split_counter = 0;
 
-    while (!split_able_nodes.empty() && split_counter != m_tree_current->frame_budget) {
+    while (!split_able_nodes.empty() && split_counter != m_tree_current->frame_budget) {        
         auto cur_top_node = *(split_able_nodes.end() - 1);
+        cur_top_node->dependend_mark = true;
         split_able_nodes.erase(split_able_nodes.end() - 1);
         resolve_dependencies_priorities(cur_top_node, split_counter);        
     }
@@ -1462,8 +1471,11 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
         split_able_nodes_pq.pop();
 
         if (current->budget_filled < current->budget) {
-            split_node(curren_node);
-            ++split_counter;
+            auto dependend_nodes = check_neighbors_for_split(curren_node);
+            if (dependend_nodes.empty()) {
+                split_node(curren_node);
+                ++split_counter;
+            }
         }
         else {
             bool collapsed = false;
@@ -1484,8 +1496,11 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
             }
 
             if (collapsed) {
-                split_node(curren_node);
-                ++split_counter;
+                auto dependend_nodes = check_neighbors_for_split(curren_node);
+                if (dependend_nodes.empty()) {
+                    split_node(curren_node);
+                    ++split_counter;
+                }
             }
             else
                 std::cout << "POOF" << std::endl;
@@ -1675,11 +1690,16 @@ QuadtreeRenderer::update_vbo(){
             color.g = color.b;
             color.b = t_g;
 
-            if ((*l)->dependend_mark)
-                color.r = 1.0;
+            if ((*l)->dependend_mark)                
+                color = glm::vec3(1.0, 0.0, 0.0);
             else {
                 color = glm::vec3(0.0, 0.0, 0.0);
             }
+
+            if ((*l)->importance < 0.0)
+                color.g = 1.0;
+            else
+                color.g = 0.0;
 
             //color = glm::vec3(1.0f, 0.0f, 0.0f);
             //if (!check_frustrum(glm::vec2(v_pos.x, v_pos.y)))
