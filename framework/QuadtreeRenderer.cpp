@@ -599,6 +599,7 @@ QuadtreeRenderer::check_and_mark_neighbors_for_split(const QuadtreeRenderer::q_n
 
         if (neighbor) {
             neighbor->dependend_mark = true;
+            n->dependend_mark = true;
             if (((int)n->depth - (int)neighbor->depth) >= 1.0) {
                 p_nodes.push_back(neighbor);
             }
@@ -731,7 +732,7 @@ QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr n
     
     float eps = 0.0001;
     
-    auto node_dependencies = check_neighbors_for_split(node);
+    auto node_dependencies = check_and_mark_neighbors_for_split(node);
 
     //std::stack<q_node_ptr> node_stack;
 
@@ -767,6 +768,10 @@ QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr n
     while (!node_stack.empty()){
         current_node = node_stack.top();
         node_stack.pop();
+
+        //reset dependend mark for each node before everything else
+        current_node->dependend_mark = false;
+        current_node->priority = 0.0;
 
         if (!current_node->leaf){
             for (unsigned c = 0; c != CHILDREN; ++c){
@@ -808,6 +813,15 @@ QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr n
         auto cur_top_node = *(split_able_nodes.end() - 1);
         split_able_nodes.erase(split_able_nodes.end() - 1);
         resolve_dependencies_priorities(cur_top_node, split_counter);        
+    }
+
+    //if (split_counter != m_tree_current->frame_budget) {
+    //    std::cout << "Went through all" << std::endl;
+    //}
+
+    for (auto l = leafs.begin(); l != leafs.end(); ++l) {
+        if((*l)->parent)
+            (*l)->parent->priority += (*l)->priority;
     }
 
 }
@@ -1447,18 +1461,19 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
         auto curren_node = split_able_nodes_pq.top();
         split_able_nodes_pq.pop();
 
-        if (current->budget > current->budget_filled) {
+        if (current->budget_filled < current->budget) {
             split_node(curren_node);
+            ++split_counter;
         }
         else {
             bool collapsed = false;
-            auto curren_col_node = colap_able_nodes_pq.top();
             while (!colap_able_nodes_pq.empty()
-                && curren_col_node->priority < curren_node->priority
                 && !collapsed) {
-                curren_col_node = colap_able_nodes_pq.top();
+                
+                auto curren_col_node = colap_able_nodes_pq.top();
                 colap_able_nodes_pq.pop();
-
+                
+                if(curren_col_node->priority < curren_node->priority)
                 if (collabsible(curren_col_node)) {
                     auto dependend_nodes = check_neighbors_for_collapse(curren_col_node);
                     if (dependend_nodes.empty()) {
@@ -1468,8 +1483,10 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
                 }
             }
 
-            if(collapsed)
+            if (collapsed) {
                 split_node(curren_node);
+                ++split_counter;
+            }
             else
                 std::cout << "POOF" << std::endl;
 
@@ -1609,7 +1626,8 @@ QuadtreeRenderer::update_vbo(){
         //std::cout << std::endl;
         unsigned counter = 0u;
 
-
+        m_treeInfo.min_prio = 99999.0;
+        m_treeInfo.max_prio = -99999.0;
 
 
         for (auto l = leafs.begin(); l != leafs.end(); ++l){
@@ -1649,10 +1667,19 @@ QuadtreeRenderer::update_vbo(){
             m_treeInfo.min_prio = std::min((*l)->priority, m_treeInfo.min_prio);
             m_treeInfo.max_prio = std::max((*l)->priority, m_treeInfo.max_prio);
 
+            //m_treeInfo.min_prio = -1.0;
+            //m_treeInfo.max_prio = 0.4;
+
             glm::vec3 color = helper::WavelengthToRGB(helper::GetWaveLengthFromDataPoint((*l)->priority, m_treeInfo.min_prio, m_treeInfo.max_prio));// glm::vec3(0.0f, 1.0f, 0.0f);
             auto t_g = color.g;
             color.g = color.b;
             color.b = t_g;
+
+            if ((*l)->dependend_mark)
+                color.r = 1.0;
+            else {
+                color = glm::vec3(0.0, 0.0, 0.0);
+            }
 
             //color = glm::vec3(1.0f, 0.0f, 0.0f);
             //if (!check_frustrum(glm::vec2(v_pos.x, v_pos.y)))
