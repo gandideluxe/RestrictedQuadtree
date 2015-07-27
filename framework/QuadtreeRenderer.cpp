@@ -8,76 +8,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-
 #include "utils.hpp"
 
-const char* quad_vertex_shader = "\
-                                 #version 140\n\
-                                 #extension GL_ARB_shading_language_420pack : require\n\
-                                 #extension GL_ARB_explicit_attrib_location : require\n\
-                                 \n\
-                                 layout(location = 0) in vec3 position;\n\
-                                 layout(location = 1) in vec3 color;\n\
-                                 out vec3 vColor;\n\
-                                 uniform mat4 Projection;\n\
-                                 uniform mat4 Modelview;\n\
-                                 \n\
-                                 void main()\n\
-                                 {\n\
-                                 vColor = color;\n\
-                                 vec4 Position = vec4(position, 1.0);\n\
-                                 gl_Position = Projection * Modelview * Position;\n\
-                                 }\n\
-                                 ";
 
-const char* quad_fragment_shader = "\
-                                   #version 140\n\
-                                   #extension GL_ARB_shading_language_420pack : require\n\
-                                   #extension GL_ARB_explicit_attrib_location : require\n\
-                                   \n\
-                                   in vec3 vColor;\n\
-                                   layout(location = 0) out vec4 FragColor;\n\
-                                   \n\
-                                   void main()\n\
-                                   {\n\
-                                   FragColor = vec4(vColor, 1.0);\n\
-                                   }\n\
-                                   ";
-
-const char* quad_vertex_texture_shader = "\
-                                         #version 140\n\
-                                         #extension GL_ARB_shading_language_420pack : require\n\
-                                         #extension GL_ARB_explicit_attrib_location : require\n\
-                                         \n\
-                                         layout(location = 0) in vec3 position;\n\
-                                         out vec2 vtexturePos;\n\
-                                         uniform mat4 Projection;\n\
-                                         uniform mat4 Modelview;\n\
-                                         \n\
-                                         void main()\n\
-                                         {\n\
-                                         vtexturePos = position.xy;\n\
-                                         vec4 Position = vec4(position, 1.0);\n\
-                                         gl_Position = Projection * Modelview * Position;\n\
-                                         }\n\
-                                         ";
-
-const char* quad_fragment_texture_shader = "\
-                                           #version 140\n\
-                                           #extension GL_ARB_shading_language_420pack : require\n\
-                                           #extension GL_ARB_explicit_attrib_location : require\n\
-                                           \n\
-                                           uniform sampler2D Texture;\n\
-                                           in vec2 vtexturePos;\n\
-                                           layout(location = 0) out vec4 FragColor;\n\
-                                           \n\
-                                           void main()\n\
-                                           {\n\
-                                           vec4 color = texture( Texture, vec2(vtexturePos.x, 1.0 - vtexturePos.y));\n\
-                                           color.a = 1.0; \n\
-                                           FragColor = color;\n\
-                                           }\n\
-                                           ";
 
 QuadtreeRenderer::QuadtreeRenderer()
 : m_program_id(0),
@@ -89,6 +22,13 @@ m_vbo_p(0),
 m_vbo_r(0),
 m_dirty(true)
 {
+    
+    auto quad_fragment_shader = readFile("../../../framework/shader/quad_shader.frag");
+    auto quad_vertex_shader = readFile("../../../framework/shader/quad_shader.vert");
+    
+    auto quad_fragment_texture_shader = readFile("../../../framework/shader/quad_texture_shader.frag");
+    auto quad_vertex_texture_shader = readFile("../../../framework/shader/quad_texture_shader.vert");
+
     m_treeInfo.min_prio = 9999.99;
     m_treeInfo.max_prio = -9999.99;
 
@@ -143,6 +83,9 @@ m_dirty(true)
     m_tree_current->qtree_id_data.resize(max_nodes_finest_level, 0);
     m_tree_ideal->qtree_id_data.resize(max_nodes_finest_level, 0);
 
+    m_tree_current->qtree_importance_data.resize(max_nodes_finest_level, 0);
+    m_tree_ideal->qtree_importance_data.resize(max_nodes_finest_level, 0);
+
     m_treeInfo.max_budget = m_tree_current->budget;
     m_treeInfo.used_budget = 0;
 
@@ -175,16 +118,20 @@ m_dirty(true)
 
 
 #if 0
-#elif 0
     glActiveTexture(GL_TEXTURE0);
     m_texture_id_current = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_depth_data[0], GL_R8, GL_RED, GL_UNSIGNED_BYTE);
     glActiveTexture(GL_TEXTURE1);
     m_texture_id_ideal = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_depth_data[0], GL_R8, GL_RED, GL_UNSIGNED_BYTE);
-#else
+#elif 0
     glActiveTexture(GL_TEXTURE0);
     m_texture_id_current = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_id_data[0], GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE);
     glActiveTexture(GL_TEXTURE1);
     m_texture_id_ideal = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_id_data[0], GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE);
+#elif 1
+    glActiveTexture(GL_TEXTURE0);
+    m_texture_id_current = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_id_data[0], GL_R8, GL_RED, GL_FLOAT);
+    glActiveTexture(GL_TEXTURE1);
+    m_texture_id_ideal = createTexture2D(m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_id_data[0], GL_R8, GL_RED, GL_FLOAT);
 #endif
 
 }
@@ -219,6 +166,8 @@ QuadtreeRenderer::init_tree(QuadtreeRenderer::q_tree_ptr tree){
     tree->qtree_depth_data.resize(max_nodes_finest_level, 0);
 
     tree->qtree_id_data.resize(max_nodes_finest_level, 0);
+
+    tree->qtree_importance_data.resize(max_nodes_finest_level, 0);
 }
 
 void
@@ -346,6 +295,7 @@ QuadtreeRenderer::split_node(QuadtreeRenderer::q_node_ptr n)
                 size_t index = (node_pos.x * one_node_to_finest + x) + (resolution - 1 - ((node_pos.y) * one_node_to_finest + y)) * resolution;
                 n->tree->qtree_index_data[index] = n->child_node[c];
                 n->tree->qtree_depth_data[index] = n->child_node[c]->depth;
+                n->tree->qtree_importance_data[index] = n->child_node[c]->importance;
                 n->tree->qtree_id_data[index] = n->child_node[c]->node_id;
             }
         }
@@ -446,6 +396,7 @@ QuadtreeRenderer::collapse_node(QuadtreeRenderer::q_node_ptr n)
             size_t index = (node_pos.x * one_node_to_finest + x) + (resolution - 1 - ((node_pos.y) * one_node_to_finest + y)) * resolution;
             n->tree->qtree_index_data[index] = n;
             n->tree->qtree_depth_data[index] = n->depth;
+            n->tree->qtree_importance_data[index] = n->importance;
             n->tree->qtree_id_data[index] = n->node_id;
         }
     }
@@ -672,7 +623,7 @@ QuadtreeRenderer::get_importance_of_node(q_node_ptr n) const
 
     auto l = glm::length(glm::vec2(pos.x, pos.y) - camera_pos) + 1.0;
 
-    auto importance = 1.0f / (l * l * l);
+    auto importance = 1.0f / (l * l);
 
     //    return 1.0f;
     return importance;
@@ -762,8 +713,8 @@ QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr n
     }    
 }
     
-    void
-    QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
+void
+QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
 
     std::stack<q_node_ptr> node_stack;
 
@@ -779,6 +730,7 @@ QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr n
 
         //reset dependend mark for each node before everything else
         current_node->dependend_mark = false;
+        current_node->importance = get_importance_of_node(current_node);
         current_node->priority = 0.0;
 
         if (!current_node->leaf){
@@ -833,6 +785,30 @@ QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr n
             (*l)->parent->priority += (*l)->priority;
     }
 
+}
+
+void
+QuadtreeRenderer::update_importance_map(QuadtreeRenderer::q_tree_ptr tree) {
+
+    auto leafs = get_leaf_nodes(tree);
+
+    for (auto n : leafs) {
+        /////insert into map
+        size_t max_nodes_finest_level = q_layout.total_node_count_level(tree->max_depth);
+        auto nodes_on_lvl = q_layout.total_node_count_level(n->depth);
+        auto one_node_to_finest = glm::sqrt((float)max_nodes_finest_level / nodes_on_lvl);
+        auto node_pos = q_layout.node_position(n->node_id);
+        auto resolution = (size_t)glm::sqrt((float)max_nodes_finest_level);
+
+        for (unsigned y = 0; y != one_node_to_finest; ++y) {
+            for (unsigned x = 0; x != one_node_to_finest; ++x) {
+                size_t index = (node_pos.x * one_node_to_finest + x) + (resolution - 1 - ((node_pos.y) * one_node_to_finest + y)) * resolution;
+                tree->qtree_importance_data[index] = n->importance;
+            }
+        }
+        ////////////////////
+    }
+       
 }
 
 
@@ -921,6 +897,7 @@ QuadtreeRenderer::copy_tree(QuadtreeRenderer::q_tree_ptr src, QuadtreeRenderer::
                 size_t index = (node_pos.x * one_node_to_finest + x) + (resolution - 1 - ((node_pos.y) * one_node_to_finest + y)) * resolution;
                 dst->qtree_index_data[index] = current_node;
                 dst->qtree_depth_data[index] = current_node->depth;
+                dst->qtree_importance_data[index] = current_node->importance;
                 dst->qtree_id_data[index] = current_node->node_id;
             }
         }
@@ -1593,6 +1570,10 @@ QuadtreeRenderer::update_tree(){
     //optimize_current_tree(m_tree_current, m_tree_ideal);
     optimize_current_tree(m_tree_current);
 
+    update_priorities(m_tree_current);
+    update_importance_map(m_tree_current);
+
+
     m_treeInfo.used_budget = m_tree_current->budget_filled;
     m_treeInfo.used_ideal_budget = m_tree_ideal->budget_filled;
 
@@ -1613,29 +1594,8 @@ void
 QuadtreeRenderer::update_vbo(){
 
     {
-        std::stack<q_node_ptr> node_stack;
 
-        node_stack.push(m_tree_current->root_node);
-
-        q_node_ptr current_node;
-
-        std::vector<q_node_ptr> leafs;
-
-        while (!node_stack.empty()){
-            current_node = node_stack.top();
-            node_stack.pop();
-
-            if (!current_node->leaf){
-                for (unsigned c = 0; c != CHILDREN; ++c){
-                    if (current_node->child_node[c]){
-                        node_stack.push(current_node->child_node[c]);
-                    }
-                }
-            }
-            else{
-                leafs.push_back(current_node);
-            }
-        }
+        std::vector<q_node_ptr> leafs = get_leaf_nodes(m_tree_current);
 
         m_cubeVertices.clear();
         //std::cout << std::endl;
@@ -1643,7 +1603,8 @@ QuadtreeRenderer::update_vbo(){
 
         m_treeInfo.min_prio = 99999.0;
         m_treeInfo.max_prio = -99999.0;
-
+        m_treeInfo.min_importance = 99999.0;
+        m_treeInfo.max_importance = -99999.0;
 
         for (auto l = leafs.begin(); l != leafs.end(); ++l){
             ++counter;
@@ -1678,14 +1639,13 @@ QuadtreeRenderer::update_vbo(){
             glm::vec4 trans = m_model * glm::vec4(v_pos, 0.0f, 1.0f);
             glm::vec2 trans2 = glm::vec2(trans.x, trans.y);
 
-
             m_treeInfo.min_prio = std::min((*l)->priority, m_treeInfo.min_prio);
             m_treeInfo.max_prio = std::max((*l)->priority, m_treeInfo.max_prio);
+            m_treeInfo.min_importance = std::min((*l)->importance, m_treeInfo.min_importance);
+            m_treeInfo.max_importance = std::max((*l)->importance, m_treeInfo.max_importance);
 
-            //m_treeInfo.min_prio = -1.0;
-            //m_treeInfo.max_prio = 0.4;
 
-            glm::vec3 color = helper::WavelengthToRGB(helper::GetWaveLengthFromDataPoint((*l)->priority, m_treeInfo.min_prio, m_treeInfo.max_prio));// glm::vec3(0.0f, 1.0f, 0.0f);
+            glm::vec3 color = helper::WavelengthToRGB(helper::GetWaveLengthFromDataPoint((*l)->importance, m_treeInfo.min_prio, m_treeInfo.max_prio));// glm::vec3(0.0f, 1.0f, 0.0f);
             auto t_g = color.g;
             color.g = color.b;
             color.b = t_g;
@@ -1693,55 +1653,34 @@ QuadtreeRenderer::update_vbo(){
             if ((*l)->dependend_mark)                
                 color = glm::vec3(1.0, 0.0, 0.0);
             else {
-                color = glm::vec3(0.0, 0.0, 0.0);
+                color = glm::vec3(1.0, 1.0, 1.0);
             }
 
-            if ((*l)->importance < 0.0)
-                color.g = 1.0;
-            else
-                color.g = 0.0;
+            //if ((*l)->importance < 0.0)
+            //    color.g = 1.0;
+            //else
+            //    color.g = 0.0;
 
-            //color = glm::vec3(1.0f, 0.0f, 0.0f);
-            //if (!check_frustrum(glm::vec2(v_pos.x, v_pos.y)))
-            //if (!check_frustrum(trans2))
-            //color = glm::vec3(1.0f, 0.0f, 0.0f);            
             v_1b.position = glm::vec3(v_pos.x, v_pos.y, 0.0f);
             v_1b.color = color;
-            //color = glm::vec3(0.0f, 1.0f, 0.0f);
-
             trans = m_model * glm::vec4(v_pos.x + v_length, v_pos.y, 0.0f, 1.0f);
             trans2 = glm::vec2(trans.x, trans.y);
-            //if (!check_frustrum(trans2))
-            //color = glm::vec3(1.0f, 0.0f, 0.0f);
             v_2b.position = glm::vec3(v_pos.x + v_length, v_pos.y, 0.0f);
             v_2b.color = color;
-            //color = glm::vec3(0.0f, 1.0f, 0.0f);
-
             trans = m_model * glm::vec4(v_pos.x + v_length, v_pos.y + v_length, 0.0f, 1.0f);
             trans2 = glm::vec2(trans.x, trans.y);
-            //if (!check_frustrum(trans2))
-            //color = glm::vec3(1.0f, 0.0f, 0.0f);
             v_3b.position = glm::vec3(v_pos.x + v_length, v_pos.y + v_length, 0.0f);
             v_3b.color = color;
-            //color = glm::vec3(0.0f, 1.0f, 0.0f);
-
             trans = m_model * glm::vec4(v_pos.x, v_pos.y + v_length, 0.0f, 1.0f);
             trans2 = glm::vec2(trans.x, trans.y);
-            //if (!check_frustrum(trans2))
-            // color = glm::vec3(1.0f, 0.0f, 0.0f);
             v_4b.position = glm::vec3(v_pos.x, v_pos.y + v_length, 0.0f);
             v_4b.color = color;
-
-
             m_cubeVertices.push_back(v_1b);
             m_cubeVertices.push_back(v_2b);
-
             m_cubeVertices.push_back(v_2b);
             m_cubeVertices.push_back(v_3b);
-
             m_cubeVertices.push_back(v_3b);
             m_cubeVertices.push_back(v_4b);
-
             m_cubeVertices.push_back(v_4b);
             m_cubeVertices.push_back(v_1b);
         }
@@ -1749,29 +1688,8 @@ QuadtreeRenderer::update_vbo(){
     }
 
     {
-        std::stack<q_node_ptr> node_stack;
 
-        node_stack.push(m_tree_ideal->root_node);
-
-        q_node_ptr current_node;
-
-        std::vector<q_node_ptr> leafs;
-
-        while (!node_stack.empty()){
-            current_node = node_stack.top();
-            node_stack.pop();
-
-            if (!current_node->leaf){
-                for (unsigned c = 0; c != CHILDREN; ++c){
-                    if (current_node->child_node[c]){
-                        node_stack.push(current_node->child_node[c]);
-                    }
-                }
-            }
-            else{
-                leafs.push_back(current_node);
-            }
-        }
+        std::vector<q_node_ptr> leafs = get_leaf_nodes(m_tree_current);
 
         m_cubeVertices_i.clear();
         //std::cout << std::endl;
@@ -1801,59 +1719,34 @@ QuadtreeRenderer::update_vbo(){
             glm::vec4 trans = m_model * glm::vec4(v_pos, 0.0f, 1.0f);
             glm::vec2 trans2 = glm::vec2(trans.x, trans.y);
 
-            m_treeInfo.min_prio = std::min((*l)->priority, m_treeInfo.min_prio);
-            m_treeInfo.max_prio = std::max((*l)->priority, m_treeInfo.max_prio);
-
-            //if (pos.x < 0.5 && pos.y < 0.5){
-            //    std::cout << "x: " << pos.x << " y: " << pos.y << " p: "  <<(*l)->priority << std::endl;
-            //}
+            //m_treeInfo.min_prio = std::min((*l)->priority, m_treeInfo.min_prio);
+            //m_treeInfo.max_prio = std::max((*l)->priority, m_treeInfo.max_prio);
 
             glm::vec3 color = helper::WavelengthToRGB(helper::GetWaveLengthFromDataPoint((*l)->priority, m_treeInfo.min_prio, m_treeInfo.max_prio));// glm::vec3(0.0f, 1.0f, 0.0f);
             //glm::vec3 color = helper::WavelengthToRGB(helper::GetWaveLengthFromDataPoint((float)(*l)->depth, 0.0, 6.0));// glm::vec3(0.0f, 1.0f, 0.0f);
             auto t_g = color.g;
             color.g = color.b;
             color.b = t_g;
-            //color = glm::vec3(1.0f, 0.0f, 0.0f);
-            //if (!check_frustrum(glm::vec2(v_pos.x, v_pos.y)))
-            //if (!check_frustrum(trans2))
-            //color = glm::vec3(1.0f, 0.0f, 0.0f);            
             v_1b.position = glm::vec3(v_pos.x, v_pos.y, 0.0f);
             v_1b.color = color;
-            //color = glm::vec3(0.0f, 1.0f, 0.0f);
-
             trans = m_model * glm::vec4(v_pos.x + v_length, v_pos.y, 0.0f, 1.0f);
             trans2 = glm::vec2(trans.x, trans.y);
-            //if (!check_frustrum(trans2))
-            //color = glm::vec3(1.0f, 0.0f, 0.0f);
             v_2b.position = glm::vec3(v_pos.x + v_length, v_pos.y, 0.0f);
             v_2b.color = color;
-            //color = glm::vec3(0.0f, 1.0f, 0.0f);
-
             trans = m_model * glm::vec4(v_pos.x + v_length, v_pos.y + v_length, 0.0f, 1.0f);
             trans2 = glm::vec2(trans.x, trans.y);
-            //if (!check_frustrum(trans2))
-            //color = glm::vec3(1.0f, 0.0f, 0.0f);
             v_3b.position = glm::vec3(v_pos.x + v_length, v_pos.y + v_length, 0.0f);
             v_3b.color = color;
-            //color = glm::vec3(0.0f, 1.0f, 0.0f);
-
             trans = m_model * glm::vec4(v_pos.x, v_pos.y + v_length, 0.0f, 1.0f);
             trans2 = glm::vec2(trans.x, trans.y);
-            //if (!check_frustrum(trans2))
-            // color = glm::vec3(1.0f, 0.0f, 0.0f);
             v_4b.position = glm::vec3(v_pos.x, v_pos.y + v_length, 0.0f);
             v_4b.color = color;
-
-
             m_cubeVertices_i.push_back(v_1b);
             m_cubeVertices_i.push_back(v_2b);
-
             m_cubeVertices_i.push_back(v_2b);
             m_cubeVertices_i.push_back(v_3b);
-
             m_cubeVertices_i.push_back(v_3b);
             m_cubeVertices_i.push_back(v_4b);
-
             m_cubeVertices_i.push_back(v_4b);
             m_cubeVertices_i.push_back(v_1b);
         }
@@ -2097,14 +1990,19 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
 
 #if 0
     glActiveTexture(GL_TEXTURE0);
-    updateTexture2D(m_texture_id_current, m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_index_data[0], GL_RGBA, GL_UNSIGNED_BYTE);
-    glActiveTexture(GL_TEXTURE1);
-    updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_index_data[0], GL_RGBA, GL_UNSIGNED_BYTE);
-#elif 0
-    glActiveTexture(GL_TEXTURE0);
     updateTexture2D(m_texture_id_current, m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_depth_data[0], GL_RED, GL_UNSIGNED_BYTE);
     glActiveTexture(GL_TEXTURE1);
     updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_depth_data[0], GL_RED, GL_UNSIGNED_BYTE);
+#elif 0
+    glActiveTexture(GL_TEXTURE0);
+    updateTexture2D(m_texture_id_current, m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_id_data[0], GL_RGB, GL_UNSIGNED_BYTE);
+    glActiveTexture(GL_TEXTURE1);
+    updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_id_data[0], GL_RGB, GL_UNSIGNED_BYTE);
+#elif 1
+    glActiveTexture(GL_TEXTURE0);
+    updateTexture2D(m_texture_id_current, m_tree_resolution, m_tree_resolution, (char*)&m_tree_current->qtree_importance_data[0], GL_RED, GL_FLOAT);
+    glActiveTexture(GL_TEXTURE1);
+    updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)&m_tree_ideal->qtree_importance_data[0], GL_RED, GL_FLOAT);
 #else
 
     auto data_current = m_tree_current->get_id_data_rgb();
@@ -2116,7 +2014,7 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
     updateTexture2D(m_texture_id_ideal, m_tree_resolution, m_tree_resolution, (char*)&data_ideal[0], GL_RGB, GL_UNSIGNED_BYTE);
 #endif
 
-#if 0
+#if 1
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_texture_id_current);
     glUseProgram(m_program_texture_id);
@@ -2155,7 +2053,7 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
     glBindTexture(GL_TEXTURE_2D, 0);
 #endif
 
-    glLineWidth(8.f);
+    glLineWidth(4.f);
 
     glUseProgram(m_program_id);
     glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Projection"), 1, GL_FALSE,
@@ -2168,7 +2066,6 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
     glBindVertexArray(0);
 
     glUseProgram(0);
-
 
 
     glUseProgram(m_program_id);

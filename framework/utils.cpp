@@ -10,10 +10,10 @@
 #include "utils.hpp"
 #include <stdexcept>
 
-GLuint loadShader(GLenum type, std::string const& s)
+GLuint loadShader(GLenum type, std::string const& source_str)
 {
   GLuint id = glCreateShader(type);
-  const char* source = s.c_str();
+  const char* source = source_str.c_str();
   glShaderSource(id, 1, &source, nullptr);
   glCompileShader(id);
 

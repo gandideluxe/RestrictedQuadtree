@@ -483,6 +483,8 @@ void showGUI(){
         ImGui::Separator();
         ImGui::Text(std::string("Min Prio: ").append(std::to_string(q_renderer.m_treeInfo.min_prio)).c_str());
         ImGui::Text(std::string("Max Prio: ").append(std::to_string(q_renderer.m_treeInfo.max_prio)).c_str());
+        ImGui::Text(std::string("Min Importance: ").append(std::to_string(q_renderer.m_treeInfo.min_importance)).c_str());
+        ImGui::Text(std::string("Max Importance: ").append(std::to_string(q_renderer.m_treeInfo.max_importance)).c_str());
         
         
         

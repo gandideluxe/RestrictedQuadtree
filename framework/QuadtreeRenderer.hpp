@@ -153,6 +153,8 @@ public:
 
         unsigned max_depth;
 
+        float min_importance;
+        float max_importance;
         float min_prio;
         float max_prio;
         
@@ -237,6 +239,7 @@ public:
         std::vector<q_node_ptr> qtree_index_data;
         std::vector<char> qtree_depth_data; //visulizing only
         std::vector<unsigned> qtree_id_data; //visulizing only
+        std::vector<float> qtree_importance_data; //visulizing only
 
         std::vector<unsigned char> get_id_data_rgb() const{
             std::vector<unsigned char> rgb_index_data;
@@ -312,6 +315,7 @@ private:
     void update_vbo();
     void update_tree();    
     void update_priorities(q_tree_ptr m_tree);
+    void update_importance_map(q_tree_ptr m_tree);
     void set_max_neigbor_priorities(q_tree_ptr m_tree);
     
     float get_importance_of_node(q_node_ptr n) const;
