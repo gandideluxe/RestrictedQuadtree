@@ -729,7 +729,7 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
         node_stack.pop();
 
         //reset dependend mark for each node before everything else
-        current_node->dependend_mark = false;
+        current_node->dependend_mark = false;        
         current_node->importance = get_importance_of_node(current_node);
         current_node->priority = 0.0;
 
@@ -788,6 +788,36 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
 }
 
 void
+QuadtreeRenderer::clear_tree_marks(QuadtreeRenderer::q_tree_ptr tree) {
+
+    std::stack<q_node_ptr> node_stack;
+
+    node_stack.push(tree->root_node);
+
+    q_node_ptr current_node;
+
+    std::vector<q_node_ptr> leafs;
+
+    while (!node_stack.empty()) {
+        current_node = node_stack.top();
+        node_stack.pop();
+
+        //reset dependend mark for each node before everything else
+        current_node->dependend_mark = false;
+        current_node->split_mark = false;
+
+        if (!current_node->leaf) {
+            for (unsigned c = 0; c != CHILDREN; ++c) {
+                if (current_node->child_node[c]) {
+                    node_stack.push(current_node->child_node[c]);
+                }
+            }
+        }
+    }
+}
+
+
+void
 QuadtreeRenderer::update_importance_map(QuadtreeRenderer::q_tree_ptr tree) {
 
     auto leafs = get_leaf_nodes(tree);
@@ -803,7 +833,7 @@ QuadtreeRenderer::update_importance_map(QuadtreeRenderer::q_tree_ptr tree) {
         for (unsigned y = 0; y != one_node_to_finest; ++y) {
             for (unsigned x = 0; x != one_node_to_finest; ++x) {
                 size_t index = (node_pos.x * one_node_to_finest + x) + (resolution - 1 - ((node_pos.y) * one_node_to_finest + y)) * resolution;
-                tree->qtree_importance_data[index] = n->importance;
+                tree->qtree_importance_data[index] = n->priority;
             }
         }
         ////////////////////
@@ -1080,6 +1110,35 @@ QuadtreeRenderer::get_collabsible_nodes(QuadtreeRenderer::q_tree_ptr t) const
         }
     }
     return colap_able_nodes;
+}
+
+
+void
+QuadtreeRenderer::set_collabsible_nodes_priorities(QuadtreeRenderer::q_tree_ptr t)
+{
+    std::stack<q_node_ptr> node_stack;
+    node_stack.push(t->root_node);
+
+    q_node_ptr current_node;
+
+    while (!node_stack.empty()) {
+        current_node = node_stack.top();
+        node_stack.pop();
+
+        if (!collabsible(current_node)) {
+            for (unsigned c = 0; c != CHILDREN; ++c) {
+                if (current_node->child_node[c]) {
+                    node_stack.push(current_node->child_node[c]);
+                }
+            }
+        }
+        else {
+            for (auto c : current_node->child_node) {
+                c->error = std::max(current_node->error, c->error);
+                c->priority = std::max(current_node->priority, c->priority);
+            }
+        }
+    }    
 }
 
 std::vector<QuadtreeRenderer::q_node_ptr>
@@ -1447,6 +1506,8 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
         auto curren_node = split_able_nodes_pq.top();
         split_able_nodes_pq.pop();
 
+        curren_node->split_mark = true;
+
         if (current->budget_filled < current->budget) {
             auto dependend_nodes = check_neighbors_for_split(curren_node);
             if (dependend_nodes.empty()) {
@@ -1561,8 +1622,11 @@ QuadtreeRenderer::generate_ideal_tree(const QuadtreeRenderer::q_tree_ptr src, Qu
 
 void
 QuadtreeRenderer::update_tree(){
+    
+    clear_tree_marks(m_tree_current);
 
     update_priorities(m_tree_current);
+    set_collabsible_nodes_priorities(m_tree_current);
 
     //delete m_tree_ideal->root_node;
 
@@ -1571,6 +1635,7 @@ QuadtreeRenderer::update_tree(){
     optimize_current_tree(m_tree_current);
 
     update_priorities(m_tree_current);
+    set_collabsible_nodes_priorities(m_tree_current);
     update_importance_map(m_tree_current);
 
 
@@ -1652,6 +1717,12 @@ QuadtreeRenderer::update_vbo(){
 
             if ((*l)->dependend_mark)                
                 color = glm::vec3(1.0, 0.0, 0.0);
+            else {
+                color = glm::vec3(1.0, 1.0, 1.0);
+            }
+
+            if ((*l)->split_mark)
+                color = glm::vec3(0.0, 1.0, 0.0);
             else {
                 color = glm::vec3(1.0, 1.0, 1.0);
             }

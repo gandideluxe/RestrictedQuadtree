@@ -10,7 +10,7 @@ void main()
 {
 vec4 color = texture( Texture, vec2(vtexturePos.x, 1.0 - vtexturePos.y));
 color.r += 1.0;
-color.r = pow(color.r, 3.0);
+color.r = pow(color.r, 4.0);
 color.r -= 1.0;
 color.a = 1.0; 
 FragColor = color;

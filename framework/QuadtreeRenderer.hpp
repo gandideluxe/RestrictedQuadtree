@@ -205,6 +205,7 @@ public:
 
         bool valid;
         bool dependend_mark;
+        bool split_mark;
 
         q_node(){            
             leaf = false;
@@ -293,6 +294,7 @@ private:
 
     std::vector<q_node_ptr> get_splitable_nodes(QuadtreeRenderer::q_tree_ptr t) const;
     std::vector<q_node_ptr> get_collabsible_nodes(QuadtreeRenderer::q_tree_ptr t) const;
+    void set_collabsible_nodes_priorities(QuadtreeRenderer::q_tree_ptr t);
     std::vector<q_node_ptr> get_leaf_nodes(QuadtreeRenderer::q_tree_ptr t) const;
     std::vector<q_node_ptr> get_leaf_nodes_with_depth_outside(QuadtreeRenderer::q_tree_ptr t, const unsigned depth) const;
 
@@ -315,6 +317,7 @@ private:
     void update_vbo();
     void update_tree();    
     void update_priorities(q_tree_ptr m_tree);
+    void clear_tree_marks(q_tree_ptr m_tree);
     void update_importance_map(q_tree_ptr m_tree);
     void set_max_neigbor_priorities(q_tree_ptr m_tree);
     
