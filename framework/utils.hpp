@@ -18,6 +18,7 @@
 #include <cerrno>
 #include <iostream>
 
+
 // Read a small text file.
 inline std::string readFile(std::string const& file)
 {

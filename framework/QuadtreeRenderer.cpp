@@ -37,7 +37,7 @@ m_dirty(true)
 
     m_tree_current = new q_tree();
 
-    m_tree_current->budget = 500;
+    m_tree_current->budget = 15;
     m_tree_current->budget_filled = 0;
     m_tree_current->frame_budget = 1;
     m_tree_current->max_depth = 5;
@@ -648,7 +648,9 @@ QuadtreeRenderer::get_error_of_node(q_node_ptr n) const
     glm::vec2 vpos3 = glm::vec2(v_pos.x + v_length, v_pos.y + v_length);
     glm::vec2 vpos4 = glm::vec2(v_pos.x, v_pos.y + v_length);
 
-    glm::vec4 trans = m_model * glm::vec4(vpos1, 0.0f, 1.0f);
+	glm::vec4 trans;
+	
+	trans = m_model * glm::vec4(vpos1, 0.0f, 1.0f);
     glm::vec2 trans1 = glm::vec2(trans.x, trans.y);
 
     trans = m_model * glm::vec4(vpos2, 0.0f, 1.0f);
@@ -709,7 +711,7 @@ QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr n
     }
 
     if (node_dependencies.empty()) {
-        ++counter;
+        //++counter;
     }    
 }
     
@@ -833,7 +835,9 @@ QuadtreeRenderer::update_importance_map(QuadtreeRenderer::q_tree_ptr tree) {
         for (unsigned y = 0; y != one_node_to_finest; ++y) {
             for (unsigned x = 0; x != one_node_to_finest; ++x) {
                 size_t index = (node_pos.x * one_node_to_finest + x) + (resolution - 1 - ((node_pos.y) * one_node_to_finest + y)) * resolution;
-                tree->qtree_importance_data[index] = n->priority;
+				tree->qtree_importance_data[index] = n->error;
+				//tree->qtree_importance_data[index] = n->error;
+				//tree->qtree_importance_data[index] = n->priority;
             }
         }
         ////////////////////
