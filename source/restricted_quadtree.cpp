@@ -482,10 +482,14 @@ void showGUI(){
         ImGui::Text(std::string("Global Error: ").append(std::to_string(q_renderer.m_treeInfo.global_error)).c_str());
         ImGui::Separator();
         ImGui::Text(std::string("Min Prio: ").append(std::to_string(q_renderer.m_treeInfo.min_prio)).c_str());
+		ImGui::SameLine();
         ImGui::Text(std::string("Max Prio: ").append(std::to_string(q_renderer.m_treeInfo.max_prio)).c_str());
         ImGui::Text(std::string("Min Importance: ").append(std::to_string(q_renderer.m_treeInfo.min_importance)).c_str());
+		ImGui::SameLine();
         ImGui::Text(std::string("Max Importance: ").append(std::to_string(q_renderer.m_treeInfo.max_importance)).c_str());
-        
+		ImGui::Text(std::string("Min Error: ").append(std::to_string(q_renderer.m_treeInfo.min_error)).c_str());
+		ImGui::SameLine();
+		ImGui::Text(std::string("Max Error: ").append(std::to_string(q_renderer.m_treeInfo.max_error)).c_str());
         
         
         if (q_renderer.m_treeInfo.global_error_difference <= 0.0)

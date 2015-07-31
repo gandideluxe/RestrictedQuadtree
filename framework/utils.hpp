@@ -18,6 +18,9 @@
 #include <cerrno>
 #include <iostream>
 
+#define GLM_FORCE_RADIANS
+#include <glm/vec2.hpp>
+#include <glm/gtx/perpendicular.hpp>
 
 // Read a small text file.
 inline std::string readFile(std::string const& file)
@@ -40,4 +43,6 @@ GLuint createTexture2D(unsigned const& width, unsigned const& height,
 GLuint createTexture3D(unsigned const& width, unsigned const& height,
     unsigned const& depth, unsigned const channel_size,
     unsigned const channel_count, const char* data);
+int inSegment(glm::vec2 P, glm::vec2 S_p0, glm::vec2 S_p1);
+int intersect2D_2Segments(glm::vec2 S1_p0, glm::vec2 S1_p1, glm::vec2 S2_p0, glm::vec2 S2_p1, glm::vec2* I0, glm::vec2* I1);
 #endif // #ifndef UTILS_HPP

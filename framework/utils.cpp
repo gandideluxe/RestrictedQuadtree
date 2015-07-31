@@ -10,10 +10,6 @@
 #include "utils.hpp"
 #include <stdexcept>
 
-#define GLM_FORCE_RADIANS
-#include <glm/vec2.hpp>
-#include <glm/gtx/perpendicular.hpp>
-
 GLuint loadShader(GLenum type, std::string const& source_str)
 {
   GLuint id = glCreateShader(type);
@@ -157,6 +153,8 @@ GLuint createTexture3D(unsigned const& width, unsigned const& height,
   return tex;
 }
 
+#define SMALL_NUM   0.00000001 
+#define perpf(u,v)  ((u).x * (v).y - (u).y * (v).x)  // perp product  (2D)
 
 // inSegment(): determine if a glm::vec2 is inside a segment
 //    Input:  a glm::vec2 P, and a collinear segment S
@@ -180,23 +178,33 @@ inSegment(glm::vec2 P, glm::vec2 S_p0, glm::vec2 S_p1)
 	return 0;
 }
 
+
+
+
+// intersect2D_2Segments(): find the 2D intersection of 2 finite segments
+//    Input:  two finite segments S1 and S2
+//    Output: *I0 = intersect point (when it exists)
+//            *I1 =  endpoint of intersect segment [I0,I1] (when it exists)
+//    Return: 0=disjoint (no intersect)
+//            1=intersect  in unique point I0
+//            2=overlap  in segment from I0 to I1
 int
 intersect2D_2Segments(glm::vec2 S1_p0, glm::vec2 S1_p1, glm::vec2 S2_p0, glm::vec2 S2_p1, glm::vec2* I0, glm::vec2* I1)
 {
 	glm::vec2    u = S1_p1 - S1_p0;
 	glm::vec2    v = S2_p1 - S2_p0;
 	glm::vec2    w = S1_p0 - S2_p0;
-	float     D = glm::perp(u, v);
+	float     D = perpf(u, v);
 
 	// test if  they are parallel (includes either being a glm::vec2)
 	if (fabs(D) < SMALL_NUM) {           // S1 and S2 are parallel
-		if (perp(u, w) != 0 || perp(v, w) != 0) {
+		if (perpf(u, w) != 0 || perpf(v, w) != 0) {
 			return 0;                    // they are NOT collinear
 		}
 		// they are collinear or degenerate
 		// check if they are degenerate  glm::vec2s
-		float du = dot(u, u);
-		float dv = dot(v, v);
+		float du = glm::dot(u, u);
+		float dv = glm::dot(v, v);
 		if (du == 0 && dv == 0) {            // both segments are glm::vec2s
 			if (S1_p0 != S2_p0)         // they are distinct  glm::vec2s
 				return 0;
@@ -204,13 +212,13 @@ intersect2D_2Segments(glm::vec2 S1_p0, glm::vec2 S1_p1, glm::vec2 S2_p0, glm::ve
 			return 1;
 		}
 		if (du == 0) {                     // S1 is a single glm::vec2
-			if (inSegment(S1_p0, S2) == 0)  // but is not in S2
+			if (inSegment(S1_p0, S2_p0, S2_p1) == 0)  // but is not in S2
 				return 0;
 			*I0 = S1_p0;
 			return 1;
 		}
 		if (dv == 0) {                     // S2 a single glm::vec2
-			if (inSegment(S2_p0, S1) == 0)  // but is not in S1
+			if (inSegment(S2_p0, S1_p0, S1_p1) == 0)  // but is not in S1
 				return 0;
 			*I0 = S2_p0;
 			return 1;
@@ -247,12 +255,12 @@ intersect2D_2Segments(glm::vec2 S1_p0, glm::vec2 S1_p1, glm::vec2 S2_p0, glm::ve
 
 	// the segments are skew and may intersect in a glm::vec2
 	// get the intersect parameter for S1
-	float     sI = perp(v, w) / D;
+	float     sI = perpf(v, w) / D;
 	if (sI < 0 || sI > 1)                // no intersect with S1
 		return 0;
 
 	// get the intersect parameter for S2
-	float     tI = perp(u, w) / D;
+	float     tI = perpf(u, w) / D;
 	if (tI < 0 || tI > 1)                // no intersect with S2
 		return 0;
 

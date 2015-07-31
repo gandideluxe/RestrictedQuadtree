@@ -154,7 +154,9 @@ public:
         unsigned max_depth;
 
         float min_importance;
-        float max_importance;
+		float max_importance;
+		float min_error;
+		float max_error;
         float min_prio;
         float max_prio;
         
@@ -226,7 +228,16 @@ public:
 
         bool operator<(const q_node& rhs) const { priority < rhs.priority; }
         bool operator>(const q_node& rhs) const { priority > rhs.priority; }
+		
     };
+
+	struct less_than_priority
+	{
+		inline bool operator() (const q_node_ptr& struct1, const q_node_ptr& struct2)
+	{
+		return (struct1->priority < struct2->priority);
+	}
+	};
 
     class q_tree{
     public:
