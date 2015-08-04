@@ -16,7 +16,7 @@ void main()
 	}
 	else{
 		color.r += 1.0;
-		color.r = pow(color.r, 1.5);
+		color.r = pow(color.r, 0.8);
 		color.r -= 1.0;
 		color.a = 1.0; 
 	}
