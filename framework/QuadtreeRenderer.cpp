@@ -779,28 +779,7 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
 
     q_node_ptr current_node;
 
-    std::vector<q_node_ptr> leafs;
-
-    while (!node_stack.empty()){
-        current_node = node_stack.top();
-        node_stack.pop();
-
-        //reset dependend mark for each node before everything else
-        //current_node->dependend_mark = false;        
-        //current_node->importance = get_importance_of_node(current_node);
-        //current_node->priority = 0.0;
-
-        if (!current_node->leaf){
-            for (unsigned c = 0; c != CHILDREN; ++c){
-                if (current_node->child_node[c]){
-                    node_stack.push(current_node->child_node[c]);
-                }
-            }
-        }
-        else{
-            leafs.push_back(current_node);
-        }
-    }
+    std::vector<q_node_ptr> leafs = get_leaf_nodes(tree);
 
     for (auto l = leafs.begin(); l != leafs.end(); ++l){
 		auto nodeid = (*l)->node_id;
@@ -827,13 +806,13 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
 
    int split_counter = 0;
 
-    //while (!split_able_nodes.empty() && split_counter != m_tree_current->frame_budget) {        
+    while (!split_able_nodes.empty() && split_counter != m_tree_current->frame_budget) {        
         auto cur_top_node = *(split_able_nodes.end() - 1);
         //cur_top_node->dependend_mark = true;
         split_able_nodes.erase(split_able_nodes.end() - 1);
         resolve_dependencies_priorities(cur_top_node, split_counter);        
 		std::sort(split_able_nodes.begin(), split_able_nodes.end(), less_than_priority());
-//}
+	}
 
     //if (split_counter != m_tree_current->frame_budget) {
     //    std::cout << "Went through all" << std::endl;

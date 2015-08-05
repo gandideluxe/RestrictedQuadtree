@@ -12,7 +12,7 @@ void main()
 
 	if(color.r <= 0.0)
 	{
-		color.b = 0.4;
+		color.b = 0.9;
 	}
 	else{
 		color.r += 1.0;
