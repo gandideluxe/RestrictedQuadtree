@@ -208,7 +208,8 @@ public:
 
         bool valid;
         bool dependend_mark;
-        bool split_mark;
+		bool split_mark;
+		bool checked_mark;
 
         q_node(){            
             leaf = false;

@@ -40,7 +40,7 @@ m_dirty(true)
     m_tree_current->budget = 400;
     m_tree_current->budget_filled = 0;
     m_tree_current->frame_budget = 1;
-    m_tree_current->max_depth = 8;
+    m_tree_current->max_depth = 5;
 
     m_tree_current->root_node = new q_node();
     m_tree_current->root_node->node_id = 0;
@@ -396,6 +396,10 @@ QuadtreeRenderer::collabsible(QuadtreeRenderer::q_node_ptr n) const{
         return false;
     }
 
+	if (n->dependend_mark) {
+		return false;
+	}
+
     for (unsigned c = 0; c != CHILDREN; ++c){
         if (n->child_node[c] != nullptr 
             && n->child_node[c]->valid == true 
@@ -599,8 +603,11 @@ QuadtreeRenderer::check_and_mark_neighbors_for_split(const QuadtreeRenderer::q_n
             if (((int)n->depth - (int)neighbor->depth) >= 1.0) {
                 //p_nodes.push_back(neighbor);
 				p_nodes_set.insert(neighbor);
-                neighbor->dependend_mark = true;
+                //neighbor->dependend_mark = true;
             }
+			else {
+				neighbor->parent->dependend_mark = true;
+			}
 
             /*if (((int)n->depth - (int)neighbor->depth) >= 0.0) {
                 neighbor->dependend_mark = true;
@@ -630,6 +637,7 @@ QuadtreeRenderer::check_neighbors_for_collapse(const QuadtreeRenderer::q_node_pt
         if (neighbor)
         if (((int)neighbor->depth) - (int)n->depth == 2){
             p_nodes.push_back(neighbor);
+			n->checked_mark = true;
         }
     }
 
@@ -744,7 +752,7 @@ QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr n
 
     float eps = 0.01;
     
-    auto node_dependencies = check_and_mark_neighbors_for_split(node);
+    auto node_dependencies = check_and_mark_neighbors_for_split(node);	
 	std::sort(node_dependencies.begin(), node_dependencies.end(), less_than_priority());
 
 	//std::stack<q_node_ptr> node_stack;
@@ -806,13 +814,15 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
 
    int split_counter = 0;
 
-    while (!split_able_nodes.empty() && split_counter != m_tree_current->frame_budget) {        
+    //while (!split_able_nodes.empty() && split_counter != m_tree_current->frame_budget) {        
         auto cur_top_node = *(split_able_nodes.end() - 1);
-        //cur_top_node->dependend_mark = true;
-        split_able_nodes.erase(split_able_nodes.end() - 1);
-        resolve_dependencies_priorities(cur_top_node, split_counter);        
+        resolve_dependencies_priorities(cur_top_node, split_counter);   
+		cur_top_node->split_mark = true;
+		split_able_nodes.erase(split_able_nodes.end() - 1);
+
 		std::sort(split_able_nodes.begin(), split_able_nodes.end(), less_than_priority());
-	}
+
+	//}
 
     //if (split_counter != m_tree_current->frame_budget) {
     //    std::cout << "Went through all" << std::endl;
@@ -842,7 +852,8 @@ QuadtreeRenderer::clear_tree_marks(QuadtreeRenderer::q_tree_ptr tree) {
 
         //reset dependend mark for each node before everything else
         current_node->dependend_mark = false;
-        current_node->split_mark = false;
+		current_node->split_mark = false;
+		current_node->checked_mark = false;
 
         if (!current_node->leaf) {
             for (unsigned c = 0; c != CHILDREN; ++c) {
@@ -1547,7 +1558,7 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
         auto curren_node = split_able_nodes_pq.top();
         split_able_nodes_pq.pop();
 
-        curren_node->split_mark = true;
+        //curren_node->split_mark = true;
 
         if (current->budget_filled < current->budget) {
             auto dependend_nodes = check_neighbors_for_split(curren_node);
@@ -1650,7 +1661,7 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
 
 void
 QuadtreeRenderer::generate_ideal_tree(const QuadtreeRenderer::q_tree_ptr src, QuadtreeRenderer::q_tree_ptr dst){
-
+	
     copy_tree(src, dst);
     //init_tree(dst);
 
@@ -1759,17 +1770,21 @@ QuadtreeRenderer::update_vbo(){
             color.g = color.b;
             color.b = t_g;
 
-            if ((*l)->dependend_mark)                
-                color = glm::vec3(1.0, 0.0, 0.0);
-            else {
-                color = glm::vec3(1.0, 1.0, 1.0);
-            }
+			color = glm::vec3(1.0, 1.0, 1.0);
 
-            if ((*l)->split_mark)
-                color = glm::vec3(0.0, 1.0, 0.0);
-            else {
-                color = glm::vec3(1.0, 1.0, 1.0);
-            }
+   //         if ((*l)->parent->dependend_mark)                
+   //             color = glm::vec3(1.0, 0.0, 0.0);
+			//else
+			//	color = glm::vec3(0.0, 1.0, 0.0);
+   //         
+   //         if ((*l)->split_mark)
+   //             color.b = 1.0;
+
+			if ((*l)->checked_mark) {
+				color.r = 0.0;
+				color.b = 0.0;
+			}
+            
 
             //if ((*l)->importance < 0.0)
             //    color.g = 1.0;
