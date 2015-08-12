@@ -11,6 +11,17 @@
 #include "utils.hpp"
 
 
+void
+QuadtreeRenderer::reload_shader(){
+	auto quad_fragment_shader = readFile(quad_fragment_shader_string);
+	auto quad_vertex_shader = readFile(quad_vertex_shader_string);
+
+	auto quad_fragment_texture_shader = readFile(quad_fragment_texture_shader_string);
+	auto quad_vertex_texture_shader = readFile(quad_vertex_texture_shader_string);
+
+	m_program_id = createProgram(quad_vertex_shader, quad_fragment_shader);
+	m_program_texture_id = createProgram(quad_vertex_texture_shader, quad_fragment_texture_shader);
+}
 
 QuadtreeRenderer::QuadtreeRenderer()
 : m_program_id(0),
@@ -22,25 +33,18 @@ m_vbo_p(0),
 m_vbo_r(0),
 m_dirty(true)
 {
-    
-    auto quad_fragment_shader = readFile("../../../framework/shader/quad_shader.frag");
-    auto quad_vertex_shader = readFile("../../../framework/shader/quad_shader.vert");
-    
-    auto quad_fragment_texture_shader = readFile("../../../framework/shader/quad_texture_shader.frag");
-    auto quad_vertex_texture_shader = readFile("../../../framework/shader/quad_texture_shader.vert");
+
+	reload_shader();
 
     m_treeInfo.min_prio = 9999.99;
     m_treeInfo.max_prio = -9999.99;
-
-    m_program_id = createProgram(quad_vertex_shader, quad_fragment_shader);
-    m_program_texture_id = createProgram(quad_vertex_texture_shader, quad_fragment_texture_shader);
 
     m_tree_current = new q_tree();
 
     m_tree_current->budget = 400;
     m_tree_current->budget_filled = 0;
-    m_tree_current->frame_budget = 1;
-    m_tree_current->max_depth = 5;
+    m_tree_current->frame_budget = 4;
+    m_tree_current->max_depth = 6;
 
     m_tree_current->root_node = new q_node();
     m_tree_current->root_node->node_id = 0;
@@ -326,7 +330,17 @@ QuadtreeRenderer::split_node(QuadtreeRenderer::q_node_ptr n)
 
         n->child_node[c]->error = get_error_of_node(n->child_node[c]);
         n->child_node[c]->importance = get_importance_of_node(n->child_node[c]);
-        n->child_node[c]->priority = n->child_node[c]->error * n->child_node[c]->importance;
+       
+		auto prio = 0.0f;
+
+		if (n->child_node[c]->error < 0.0) {
+			prio = - n->child_node[c]->importance + n->child_node[c]->error;;
+		}
+		else {
+			prio = n->child_node[c]->importance * n->child_node[c]->error;
+		}
+
+		n->child_node[c]->priority = prio;
 
         ///////setting node index image
         size_t max_nodes_finest_level = q_layout.total_node_count_level(n->tree->max_depth);
@@ -427,7 +441,18 @@ QuadtreeRenderer::collapse_node(QuadtreeRenderer::q_node_ptr n)
 
     n->error = get_error_of_node(n);
     n->importance = get_importance_of_node(n);
-    n->priority = n->importance * n->error;
+    //n->priority = n->importance * n->error;
+
+	auto prio = 0.0f;
+
+	if (n->error < 0.0) {
+		prio = -n->importance + n->error;;
+	}
+	else {
+		prio = n->importance * n->error;
+	}
+
+	n->priority = prio;
 
     n->tree->budget_filled -= CHILDREN;
 
@@ -735,7 +760,7 @@ QuadtreeRenderer::get_error_of_node(q_node_ptr n) const
     {
         auto depth = n->depth + 1;
 
-        auto local_error = ((float)m_treeInfo.ref_dim.x / (m_treeInfo.page_dim.x * depth) + (float)m_treeInfo.ref_dim.y / (m_treeInfo.page_dim.y * depth)) * 0.5;
+        auto local_error = ((float)m_treeInfo.ref_dim.x / (m_treeInfo.page_dim.x * std::sqrt(depth)) + (float)m_treeInfo.ref_dim.y / (m_treeInfo.page_dim.y * std::sqrt(depth))) * 0.5;
 
         error = local_error;
     }
@@ -773,9 +798,9 @@ QuadtreeRenderer::resolve_dependencies_priorities(QuadtreeRenderer::q_node_ptr n
 
     }
 
-    if (node_dependencies.empty()) {
-//        ++counter;
-    }    
+/*    if (node_dependencies.empty()) {
+        ++counter;
+    } */   
 }
     
 void
@@ -793,9 +818,17 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
 		auto nodeid = (*l)->node_id;
         (*l)->importance = get_importance_of_node(*l);
         (*l)->error = get_error_of_node(*l);
-
-        auto prio = (*l)->importance * (*l)->error;
-        (*l)->priority = prio;
+				
+		auto prio = 0.0f;
+		
+		if ((*l)->error < 0.0) {
+			prio = - (*l)->importance + (*l)->error;;
+		}
+		else {
+			prio = (*l)->importance * (*l)->error;
+		}
+		
+		(*l)->priority = prio;
     }
 
     auto global_error = 0.0;
@@ -814,15 +847,15 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
 
    int split_counter = 0;
 
-    //while (!split_able_nodes.empty() && split_counter != m_tree_current->frame_budget) {        
+    while (!split_able_nodes.empty() && split_counter != m_tree_current->frame_budget) {        
         auto cur_top_node = *(split_able_nodes.end() - 1);
         resolve_dependencies_priorities(cur_top_node, split_counter);   
 		cur_top_node->split_mark = true;
 		split_able_nodes.erase(split_able_nodes.end() - 1);
 
 		std::sort(split_able_nodes.begin(), split_able_nodes.end(), less_than_priority());
-
-	//}
+		++split_counter;
+	}
 
     //if (split_counter != m_tree_current->frame_budget) {
     //    std::cout << "Went through all" << std::endl;
@@ -830,8 +863,13 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
 
     for (auto l = leafs.begin(); l != leafs.end(); ++l) {
         if((*l)->parent)
-            (*l)->parent->priority += (*l)->priority;
+            (*l)->parent->priority = - 999999.0;
     }
+
+	for (auto l = leafs.begin(); l != leafs.end(); ++l) {
+		if ((*l)->parent)
+			(*l)->parent->priority = std::max((*l)->priority, (*l)->parent->priority);
+	}
 
 }
 
@@ -2186,7 +2224,7 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
     glBindTexture(GL_TEXTURE_2D, 0);
 #endif
 
-    glLineWidth(4.f);
+    glLineWidth(2.f);
 
     glUseProgram(m_program_id);
     glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Projection"), 1, GL_FALSE,
@@ -2225,7 +2263,7 @@ void QuadtreeRenderer::update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_d
 
     glUseProgram(0);
 
-    glPointSize(30.0);
+    glPointSize(4.0);
 
     glUseProgram(m_program_id);
     glUniformMatrix4fv(glGetUniformLocation(m_program_id, "Projection"), 1, GL_FALSE,

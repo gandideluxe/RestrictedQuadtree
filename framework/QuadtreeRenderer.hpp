@@ -269,6 +269,8 @@ public:
     QuadtreeRenderer();
     ~QuadtreeRenderer() {}
 
+	void reload_shader();
+
     void reset();
         
     void set_restriction(bool restriction, glm::vec2 restriction_line[2], bool restriction_direction);
@@ -397,6 +399,13 @@ private:
     scm::data::quadtree_layout q_layout;
 
     std::vector<q_node_ptr> cleanup_container;
+
+	std::string quad_fragment_shader_string = "../../../framework/shader/quad_shader.frag";
+	std::string quad_vertex_shader_string = "../../../framework/shader/quad_shader.vert";
+
+	std::string quad_fragment_texture_shader_string = "../../../framework/shader/quad_texture_shader.frag";
+	std::string quad_vertex_texture_shader_string = "../../../framework/shader/quad_texture_shader.vert";
+
 };
 
 

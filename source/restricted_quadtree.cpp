@@ -46,7 +46,7 @@
 //-----------------------------------------------------------------------------
 // Window Size
 //-----------------------------------------------------------------------------
-glm::ivec2  g_window_res = glm::ivec2(1920, 1080);
+glm::ivec2  g_window_res = glm::ivec2(5000, 2600);
 
 //-----------------------------------------------------------------------------
 // Helpers
@@ -606,6 +606,8 @@ int main(int argc, char* argv[])
 
             GLuint newProgram(0);
             try {
+				std::cout << "Reload Shader" << std::endl;
+				q_renderer.reload_shader();
                 //std::cout << "Reload shaders" << std::endl;
                 //newProgram = loadShaders(g_file_vertex_shader, g_file_fragment_shader, g_task_chosen, g_lighting_toggle, g_shadow_toggle, g_opacity_correction_toggle);
                 //g_error_message = "";

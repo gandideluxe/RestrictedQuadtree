@@ -10,13 +10,13 @@ void main()
 {
 	vec4 color = texture( Texture, vec2(vtexturePos.x, 1.0 - vtexturePos.y));
 
-	if(color.r <= 0.0)
+	if(color.r <= 0.0001)
 	{
 		color.b = 0.9;
 	}
 	else{
 		color.r += 1.0;
-		color.r = pow(color.r, 0.8);
+		color.r = pow(color.r, 100.0);
 		color.r -= 1.0;
 		color.a = 1.0; 
 	}
