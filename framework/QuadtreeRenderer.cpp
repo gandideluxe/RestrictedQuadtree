@@ -41,10 +41,10 @@ m_dirty(true)
 
     m_tree_current = new q_tree();
 
-    m_tree_current->budget = 400;
+    m_tree_current->budget = 2000;
     m_tree_current->budget_filled = 0;
     m_tree_current->frame_budget = 4;
-    m_tree_current->max_depth = 6;
+    m_tree_current->max_depth = 7;
 
     m_tree_current->root_node = new q_node();
     m_tree_current->root_node->node_id = 0;
@@ -705,7 +705,7 @@ QuadtreeRenderer::get_importance_of_node(q_node_ptr n) const
 
     auto l = glm::length(glm::vec2(pos.x, pos.y) - camera_pos) + 1.0;
 
-    auto importance = 1.0f / (l * l * l);
+    auto importance = 1.0f / (l * l);
 
     //    return 1.0f;
     return importance;
@@ -759,8 +759,9 @@ QuadtreeRenderer::get_error_of_node(q_node_ptr n) const
     else
     {
         auto depth = n->depth + 1;
-
-        auto local_error = ((float)m_treeInfo.ref_dim.x / (m_treeInfo.page_dim.x * std::sqrt(depth)) + (float)m_treeInfo.ref_dim.y / (m_treeInfo.page_dim.y * std::sqrt(depth))) * 0.5;
+				
+		//auto local_error = ((float)m_treeInfo.ref_dim.x / (m_treeInfo.page_dim.x * std::sqrt(depth)) + (float)m_treeInfo.ref_dim.y / (m_treeInfo.page_dim.y * std::sqrt(depth))) * 0.5;
+		auto local_error = 1.0 / ((m_treeInfo.page_dim.x * m_treeInfo.page_dim.y * std::powf((float)CHILDREN, (float)depth)) / ((m_treeInfo.page_dim.x * m_treeInfo.page_dim.y * std::powf((float)CHILDREN, (float)n->tree->max_depth))));
 
         error = local_error;
     }
@@ -815,7 +816,7 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
     std::vector<q_node_ptr> leafs = get_leaf_nodes(tree);
 
     for (auto l = leafs.begin(); l != leafs.end(); ++l){
-		auto nodeid = (*l)->node_id;
+		
         (*l)->importance = get_importance_of_node(*l);
         (*l)->error = get_error_of_node(*l);
 				
@@ -829,11 +830,12 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
 		}
 		
 		(*l)->priority = prio;
+
     }
 
     auto global_error = 0.0;
     for (auto l = leafs.begin(); l != leafs.end(); ++l){
-        global_error += ((1.0 / (leafs.size() * m_treeInfo.page_dim.x * m_treeInfo.page_dim.y)) * ((*l)->error) * (*l)->importance);
+        global_error += ((1.0 / (leafs.size() * m_treeInfo.page_dim.x * m_treeInfo.page_dim.y)) * ((*l)->error) * (*l)->importance) * 10000.0;
     }
 
     m_treeInfo.global_error_difference = global_error - m_treeInfo.global_error;
@@ -867,8 +869,24 @@ QuadtreeRenderer::update_priorities(QuadtreeRenderer::q_tree_ptr tree){
     }
 
 	for (auto l = leafs.begin(); l != leafs.end(); ++l) {
-		if ((*l)->parent)
-			(*l)->parent->priority = std::max((*l)->priority, (*l)->parent->priority);
+		//if ((*l)->parent)
+		//	(*l)->parent->priority = std::max((*l)->priority, (*l)->parent->priority);
+		if ((*l)->parent) {
+			auto parent = (*l)->parent;
+			parent->importance = get_importance_of_node(parent);
+			parent->error = get_error_of_node(parent);
+
+			auto prio = 0.0f;
+
+			if ((parent)->error < 0.0) {
+				prio = -(parent)->importance + (parent)->error;;
+			}
+			else {
+				prio = (parent)->importance * (parent)->error;
+			}
+
+			(parent)->priority = prio;
+		}
 	}
 
 }
@@ -1613,7 +1631,7 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
                 auto curren_col_node = colap_able_nodes_pq.top();
                 colap_able_nodes_pq.pop();
                 
-                if(curren_col_node->priority < curren_node->priority)
+                if((curren_col_node->priority + curren_col_node->priority * 0.001) < curren_node->priority)
                 if (collabsible(curren_col_node)) {
                     auto dependend_nodes = check_neighbors_for_collapse(curren_col_node);
                     if (dependend_nodes.empty()) {
@@ -1630,11 +1648,7 @@ QuadtreeRenderer::optimize_current_tree(QuadtreeRenderer::q_tree_ptr current){
                     ++split_counter;
                 }
             }
-            else
-                std::cout << "POOF" << std::endl;
-
         }
-
     }
 
 #if 1
