@@ -146,8 +146,9 @@ int g_bilinear_interpolation = true;
 
 glm::vec2 g_test_point = glm::vec2(0.3f, 0.3f);
 
-glm::vec2 g_ref_point = glm::vec2(0.5f, 0.2f);
-glm::vec2 g_frustrum_points[2] = { glm::vec2(0.4f, 0.8f), glm::vec2(0.7f, 0.7f) };
+std::vector<glm::vec2> g_ref_point_vec;
+std::vector<glm::vec2> g_frustrum_points_0;// = { glm::vec2(0.4f, 0.8f), glm::vec2(0.7f, 0.7f) };
+std::vector<glm::vec2> g_frustrum_points_1;// = { glm::vec2(0.4f, 0.8f), glm::vec2(0.7f, 0.7f) };
 
 glm::vec2 g_restriction_line[2] = { glm::vec2(0.4f, 0.4f), glm::vec2(0.5f, 0.5f) };
 bool      g_restriction_direction = true;
@@ -388,6 +389,14 @@ void InitImGui()
 
     g_time_last = ImGui::GetTime();
 
+	g_ref_point_vec.push_back(glm::vec2(0.2f, 0.5f));
+	g_ref_point_vec.push_back(glm::vec2(0.4f, 0.5f));
+
+	g_frustrum_points_0.push_back(glm::vec2(0.4f, 0.8f));
+	g_frustrum_points_1.push_back(glm::vec2(0.7f, 0.7f));
+	g_frustrum_points_0.push_back(glm::vec2(0.4f, 0.8f));
+	g_frustrum_points_1.push_back(glm::vec2(0.7f, 0.7f));
+
 }
 
 void UpdateImGui()
@@ -561,12 +570,22 @@ int main(int argc, char* argv[])
         //        ... do something
         //    
         //}
+		float pick_radius = 0.03f;
 
         if (g_win.isButtonPressed(Window::MOUSE_BUTTON_LEFT)){
-            g_ref_point = g_win.mousePosition();
+			auto right_pick_point = g_win.mousePosition();
+			if (g_win.isKeyPressed(GLFW_KEY_LEFT_SHIFT)) {
+				for (auto& p : g_ref_point_vec) {
+					if (glm::length(p - right_pick_point) < pick_radius) {
+						p = right_pick_point;
+					}
+				}
+			}
+			else {
+				g_ref_point_vec[0] = right_pick_point;
+			}
         }
 
-        float pick_radius = 0.03f;
 
         if (g_win.isButtonPressed(Window::MOUSE_BUTTON_MIDDLE)){
             auto right_pick_point = g_win.mousePosition();
@@ -574,13 +593,18 @@ int main(int argc, char* argv[])
             if (glm::length(g_test_point - right_pick_point) < pick_radius){
                 g_test_point = right_pick_point;
             }
-            if (glm::length(g_frustrum_points[0] - right_pick_point) < pick_radius){
-                g_frustrum_points[0] = right_pick_point;
-            }
-            else
-            if (glm::length(g_frustrum_points[1] - right_pick_point) < pick_radius){
-                g_frustrum_points[1] = right_pick_point;
-            }
+
+			unsigned frus_c = 0;
+			for(auto& c : g_ref_point_vec){
+				if (glm::length(g_frustrum_points_0[frus_c] - right_pick_point) < pick_radius){
+					g_frustrum_points_0[frus_c] = right_pick_point;
+				}
+				else
+				if (glm::length(g_frustrum_points_1[frus_c] - right_pick_point) < pick_radius){
+					g_frustrum_points_1[frus_c] = right_pick_point;
+				}
+				++frus_c;
+			}
         }
 
 
@@ -598,8 +622,17 @@ int main(int argc, char* argv[])
         }
 
         q_renderer.set_restriction(g_restriction, g_restriction_line, g_restriction_direction);
-        q_renderer.set_frustum(g_ref_point, g_frustrum_points);
-        q_renderer.set_test_point(g_test_point);
+
+		unsigned frus_nbr = 0;
+		for (auto& p : g_ref_point_vec) {
+
+			glm::vec2 fp[2] = { glm::vec2(g_frustrum_points_0[frus_nbr]), glm::vec2(g_frustrum_points_1[frus_nbr]) };
+			q_renderer.set_frustum(frus_nbr, p, fp);
+			++frus_nbr;
+		}
+        
+		
+		q_renderer.set_test_point(g_test_point);
 
         /// reload shader if key R ist pressed
         if (g_reload_shader){
@@ -723,7 +756,7 @@ int main(int argc, char* argv[])
         ImGui::Render();
         //IMGUI ROUTINE end        
         
-        q_renderer.update_and_draw(g_ref_point, glm::uvec2(io.DisplaySize.x, io.DisplaySize.y));
+        q_renderer.update_and_draw(g_ref_point_vec, glm::uvec2(io.DisplaySize.x, io.DisplaySize.y));
 
         glBindTexture(GL_TEXTURE_2D, 0);
         g_win.update();

@@ -41,8 +41,8 @@ namespace helper {
     }
 
     ///////////////////////////////////////////////////////////////////////
-    static float Gamma = 0.80;
-    static float IntensityMax = 255.0;
+    static float Gamma = 0.80f;
+    static float IntensityMax = 255.0f;
 
     ///////////////////////////////////////////////////////////////////////
     static float round(float d){
@@ -265,6 +265,15 @@ public:
         
     };
             
+	class frustrum_2d {
+		public:
+			glm::vec2         m_camera_point;
+			glm::vec2         m_camera_point_trans;
+
+			glm::vec2         m_frustrum_points[2];
+			glm::vec2         m_frustrum_points_trans[2];
+	};
+
 public:
     QuadtreeRenderer();
     ~QuadtreeRenderer() {}
@@ -274,9 +283,9 @@ public:
     void reset();
         
     void set_restriction(bool restriction, glm::vec2 restriction_line[2], bool restriction_direction);
-    void set_frustum(glm::vec2 camera_point, glm::vec2 restriction_line[2]);
+    void set_frustum(const unsigned frust_nr, glm::vec2 camera_point, glm::vec2 restriction_line[2]);
     void set_test_point(glm::vec2 test_point);
-    void update_and_draw(glm::vec2 screen_pos, glm::uvec2 screen_dim);
+    void update_and_draw(std::vector<glm::vec2> screen_pos, glm::uvec2 screen_dim);
 
 
     
@@ -340,7 +349,7 @@ private:
     float get_error_of_node(q_node_ptr n) const;
 
     bool check_frustrum(q_node_ptr pos) const;
-    bool check_frustrum(glm::vec2 pos) const;
+    bool check_frustrum(const unsigned frust_nbr, glm::vec2 pos) const;
 
     bool is_node_inside_tree(q_node_ptr node, q_tree_ptr tree);
     bool is_child_node_inside_tree(q_node_ptr node, q_tree_ptr tree);
@@ -372,11 +381,13 @@ private:
     glm::vec2         m_restriction_line_trans[2];
     bool              m_restriction_direction;
     
-    glm::vec2         m_camera_point;
+	std::vector<frustrum_2d>	 m_frustrum_2d_vec;
+
+    /*glm::vec2         m_camera_point;
     glm::vec2         m_camera_point_trans;
 
     glm::vec2         m_frustrum_points[2];
-    glm::vec2         m_frustrum_points_trans[2];
+    glm::vec2         m_frustrum_points_trans[2];*/
 
     glm::vec2         m_test_point;
     glm::vec2         m_test_point_trans;
