@@ -714,12 +714,12 @@ QuadtreeRenderer::get_importance_of_node(q_node_ptr n) const
     size_t max_nodes_finest_level = q_layout.total_node_count_level(n->depth);
     auto resolution = (size_t)glm::sqrt((float)max_nodes_finest_level);
 
-	double l = 0.0;
+	double l = 1000000.0;
 
 	for (auto& f : m_frustrum_2d_vec) {
 		auto camera_pos = (float)resolution * glm::vec2(f.m_camera_point_trans.x, f.m_camera_point_trans.y);
 
-		l = std::max(glm::length(glm::vec2(pos.x, pos.y) - camera_pos) + 1.0, l);
+		l = std::min(glm::length(glm::vec2(pos.x, pos.y) - camera_pos) + 1.0, l);
 	}
     auto importance = 1.0f / (l * l);
 
@@ -954,9 +954,9 @@ QuadtreeRenderer::update_importance_map(QuadtreeRenderer::q_tree_ptr tree) {
         for (unsigned y = 0; y != one_node_to_finest; ++y) {
             for (unsigned x = 0; x != one_node_to_finest; ++x) {
                 size_t index = (node_pos.x * one_node_to_finest + x) + (resolution - 1 - ((node_pos.y) * one_node_to_finest + y)) * resolution;
-				tree->qtree_importance_data[index] = n->priority;
+				//tree->qtree_importance_data[index] = n->importance;
 				//tree->qtree_importance_data[index] = n->error;
-				//tree->qtree_importance_data[index] = n->priority;
+				tree->qtree_importance_data[index] = n->priority;
             }
         }
         ////////////////////
