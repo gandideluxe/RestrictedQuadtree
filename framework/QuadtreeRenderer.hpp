@@ -348,7 +348,8 @@ private:
     float get_importance_of_node(q_node_ptr n) const;
     float get_error_of_node(q_node_ptr n) const;
 
-    bool check_frustrum(q_node_ptr pos) const;
+	bool check_frustrum(q_node_ptr pos) const;
+	bool check_frustrum(const unsigned frust_nbr, q_node_ptr pos) const;
     bool check_frustrum(const unsigned frust_nbr, glm::vec2 pos) const;
 
     bool is_node_inside_tree(q_node_ptr node, q_tree_ptr tree);

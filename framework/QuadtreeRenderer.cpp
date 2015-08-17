@@ -43,7 +43,7 @@ m_dirty(true)
 
     m_tree_current->budget = 2000;
     m_tree_current->budget_filled = 0;
-    m_tree_current->frame_budget = 20;
+    m_tree_current->frame_budget = 1;
     m_tree_current->max_depth = 7;
 
     m_tree_current->root_node = new q_node();
@@ -293,6 +293,86 @@ QuadtreeRenderer::check_frustrum(QuadtreeRenderer::q_node_ptr n) const
 	}
     return in_frustrum;
 }
+
+
+bool
+QuadtreeRenderer::check_frustrum(const unsigned frust_nbr, QuadtreeRenderer::q_node_ptr n) const
+{
+	auto pos = q_layout.node_position(n->node_id);
+	auto node_level = q_layout.level_index(n->node_id);
+	auto total_node_index = q_layout.total_node_count(node_level);
+
+	auto max_pos = q_layout.node_position(total_node_index - 1);
+
+	auto v_pos = glm::vec2((float)pos.x / (max_pos.x + 1.0), (float)pos.y / (max_pos.y + 1.0));
+	auto v_length = 1.0 / (max_pos.x + 1);
+
+	glm::vec2 vpos1 = v_pos;
+	glm::vec2 vpos2 = glm::vec2(v_pos.x + v_length, v_pos.y);
+	glm::vec2 vpos3 = glm::vec2(v_pos.x + v_length, v_pos.y + v_length);
+	glm::vec2 vpos4 = glm::vec2(v_pos.x, v_pos.y + v_length);
+
+	glm::vec4 trans = m_model * glm::vec4(vpos1, 0.0f, 1.0f);
+	glm::vec2 trans1 = glm::vec2(trans.x, trans.y);
+
+	trans = m_model * glm::vec4(vpos2, 0.0f, 1.0f);
+	glm::vec2 trans2 = glm::vec2(trans.x, trans.y);
+
+	trans = m_model * glm::vec4(vpos3, 0.0f, 1.0f);
+	glm::vec2 trans3 = glm::vec2(trans.x, trans.y);
+
+	trans = m_model * glm::vec4(vpos4, 0.0f, 1.0f);
+	glm::vec2 trans4 = glm::vec2(trans.x, trans.y);
+
+	bool in_frustrum = false;
+	
+	auto& f = m_frustrum_2d_vec[frust_nbr];
+
+	glm::vec2 f1 = f.m_frustrum_points[0];
+	glm::vec2 f2 = f.m_frustrum_points[1];
+
+	glm::vec2 p1 = glm::vec2(trans1.x, trans1.y);
+	glm::vec2 p2 = glm::vec2(trans2.x, trans2.y);
+	glm::vec2 p3 = glm::vec2(trans3.x, trans3.y);
+	glm::vec2 p4 = glm::vec2(trans4.x, trans4.y);
+
+	glm::vec2 cp = f.m_camera_point;
+	glm::vec2 rp1;
+	glm::vec2 rp2;
+
+	auto ipoint1 = intersect2D_2Segments(cp, f1, p1, p2, &rp1, &rp2);
+	auto ipoint2 = intersect2D_2Segments(cp, f1, p2, p3, &rp1, &rp2);
+	auto ipoint3 = intersect2D_2Segments(cp, f1, p3, p4, &rp1, &rp2);
+	auto ipoint4 = intersect2D_2Segments(cp, f1, p4, p1, &rp1, &rp2);
+	auto ipoint5 = intersect2D_2Segments(cp, f2, p1, p2, &rp1, &rp2);
+	auto ipoint6 = intersect2D_2Segments(cp, f2, p2, p3, &rp1, &rp2);
+	auto ipoint7 = intersect2D_2Segments(cp, f2, p3, p4, &rp1, &rp2);
+	auto ipoint8 = intersect2D_2Segments(cp, f2, p4, p1, &rp1, &rp2);
+
+	if (!(
+		check_frustrum(frust_nbr, trans1)
+		|| check_frustrum(frust_nbr, trans2)
+		|| check_frustrum(frust_nbr, trans3)
+		|| check_frustrum(frust_nbr, trans4)
+		|| ipoint1 != 0
+		|| ipoint2 != 0
+		|| ipoint3 != 0
+		|| ipoint4 != 0
+		|| ipoint5 != 0
+		|| ipoint6 != 0
+		|| ipoint7 != 0
+		|| ipoint8 != 0
+		)) {
+
+		//in_frustrum = false;
+	}
+	else {
+		in_frustrum = true;
+	}
+
+	return in_frustrum;
+}
+
 
 bool
 QuadtreeRenderer::check_frustrum(const unsigned frust_nbr, glm::vec2 pos) const
@@ -715,11 +795,18 @@ QuadtreeRenderer::get_importance_of_node(q_node_ptr n) const
     auto resolution = (size_t)glm::sqrt((float)max_nodes_finest_level);
 
 	double l = 1000000.0;
-
+	
+	unsigned frust_nbr = 0;
+	
 	for (auto& f : m_frustrum_2d_vec) {
-		auto camera_pos = (float)resolution * glm::vec2(f.m_camera_point_trans.x, f.m_camera_point_trans.y);
 
-		l = std::min(glm::length(glm::vec2(pos.x, pos.y) - camera_pos) + 1.0, l);
+		if (check_frustrum(frust_nbr, n)) {
+			auto camera_pos = (float)resolution * glm::vec2(f.m_camera_point_trans.x, f.m_camera_point_trans.y);
+
+			l = std::min(glm::length(glm::vec2(pos.x, pos.y) - camera_pos) + 1.0, l);
+		}
+
+		++frust_nbr;
 	}
     auto importance = 1.0f / (l * l);
 
