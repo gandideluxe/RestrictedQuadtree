@@ -154,7 +154,8 @@ glm::vec2 g_restriction_line[2] = { glm::vec2(0.4f, 0.4f), glm::vec2(0.5f, 0.5f)
 bool      g_restriction_direction = true;
 bool      g_restriction = true;
 
-
+int g_splits_per_frame = 1;
+int g_sleep_miliseconds = 5;
 
 struct Manipulator
 {
@@ -507,6 +508,9 @@ void showGUI(){
             ImGui::TextColored(ImVec4(1.0, 0.0, 0.0, 1.0), std::string("Global Error Difference: ").append(std::to_string(q_renderer.m_treeInfo.global_error_difference)).c_str());
         ImGui::Separator();
 
+		ImGui::SliderInt("Splits per Frame", &g_splits_per_frame, 0, 100);
+		ImGui::SliderInt("Frame Delay Miliseconds", &g_sleep_miliseconds, 0, 200);
+
     }
 
     if (ImGui::CollapsingHeader("Window options"))
@@ -572,67 +576,70 @@ int main(int argc, char* argv[])
         //}
 		float pick_radius = 0.03f;
 
-        if (g_win.isButtonPressed(Window::MOUSE_BUTTON_LEFT)){
-			auto right_pick_point = g_win.mousePosition();
-			if (g_win.isKeyPressed(GLFW_KEY_LEFT_SHIFT)) {
-				for (auto& p : g_ref_point_vec) {
-					if (glm::length(p - right_pick_point) < pick_radius) {
-						p = right_pick_point;
+		if(!g_over_gui){
+
+			if (g_win.isButtonPressed(Window::MOUSE_BUTTON_LEFT)){
+				auto right_pick_point = g_win.mousePosition();
+				if (g_win.isKeyPressed(GLFW_KEY_LEFT_SHIFT)) {
+					for (auto& p : g_ref_point_vec) {
+						if (glm::length(p - right_pick_point) < pick_radius) {
+							p = right_pick_point;
+						}
 					}
 				}
-			}
-			else {
-				g_ref_point_vec[0] = right_pick_point;
-			}
-        }
-
-
-        if (g_win.isButtonPressed(Window::MOUSE_BUTTON_MIDDLE)){
-            auto right_pick_point = g_win.mousePosition();
-
-            if (glm::length(g_test_point - right_pick_point) < pick_radius){
-                g_test_point = right_pick_point;
-            }
-
-			unsigned frus_c = 0;
-			for(auto& c : g_ref_point_vec){
-				if (glm::length(g_frustrum_points_0[frus_c] - right_pick_point) < pick_radius){
-					g_frustrum_points_0[frus_c] = right_pick_point;
+				else {
+					g_ref_point_vec[0] = right_pick_point;
 				}
-				else
-				if (glm::length(g_frustrum_points_1[frus_c] - right_pick_point) < pick_radius){
-					g_frustrum_points_1[frus_c] = right_pick_point;
-				}
-				++frus_c;
 			}
-        }
 
 
-        if (g_win.isButtonPressed(Window::MOUSE_BUTTON_RIGHT)){
-           auto right_pick_point = g_win.mousePosition();
+			if (g_win.isButtonPressed(Window::MOUSE_BUTTON_MIDDLE)){
+				auto right_pick_point = g_win.mousePosition();
 
-           if (glm::length(g_restriction_line[0] - right_pick_point) < pick_radius){
-               g_restriction_line[0] = right_pick_point;
-           }
-           else
-           if (glm::length(g_restriction_line[1] - right_pick_point) < pick_radius){
-               g_restriction_line[1] = right_pick_point;
-           }
+				if (glm::length(g_test_point - right_pick_point) < pick_radius){
+					g_test_point = right_pick_point;
+				}
 
-        }
+				unsigned frus_c = 0;
+				for(auto& c : g_ref_point_vec){
+					if (glm::length(g_frustrum_points_0[frus_c] - right_pick_point) < pick_radius){
+						g_frustrum_points_0[frus_c] = right_pick_point;
+					}
+					else
+					if (glm::length(g_frustrum_points_1[frus_c] - right_pick_point) < pick_radius){
+						g_frustrum_points_1[frus_c] = right_pick_point;
+					}
+					++frus_c;
+				}
+			}
 
-        q_renderer.set_restriction(g_restriction, g_restriction_line, g_restriction_direction);
 
-		unsigned frus_nbr = 0;
-		for (auto& p : g_ref_point_vec) {
+			if (g_win.isButtonPressed(Window::MOUSE_BUTTON_RIGHT)){
+			   auto right_pick_point = g_win.mousePosition();
 
-			glm::vec2 fp[2] = { glm::vec2(g_frustrum_points_0[frus_nbr]), glm::vec2(g_frustrum_points_1[frus_nbr]) };
-			q_renderer.set_frustum(frus_nbr, p, fp);
-			++frus_nbr;
+			   if (glm::length(g_restriction_line[0] - right_pick_point) < pick_radius){
+				   g_restriction_line[0] = right_pick_point;
+			   }
+			   else
+			   if (glm::length(g_restriction_line[1] - right_pick_point) < pick_radius){
+				   g_restriction_line[1] = right_pick_point;
+			   }
+
+			}
+
+			q_renderer.set_restriction(g_restriction, g_restriction_line, g_restriction_direction);
+
+			unsigned frus_nbr = 0;
+			for (auto& p : g_ref_point_vec) {
+
+				glm::vec2 fp[2] = { glm::vec2(g_frustrum_points_0[frus_nbr]), glm::vec2(g_frustrum_points_1[frus_nbr]) };
+				q_renderer.set_frustum(frus_nbr, p, fp);
+				++frus_nbr;
+			}
 		}
-        
 		
 		q_renderer.set_test_point(g_test_point);
+		q_renderer.set_splits_per_frame(g_splits_per_frame);
 
         /// reload shader if key R ist pressed
         if (g_reload_shader){
@@ -761,7 +768,7 @@ int main(int argc, char* argv[])
         glBindTexture(GL_TEXTURE_2D, 0);
         g_win.update();
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        std::this_thread::sleep_for(std::chrono::milliseconds(g_sleep_miliseconds));
 
     }
 

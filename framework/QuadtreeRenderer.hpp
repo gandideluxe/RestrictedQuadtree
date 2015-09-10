@@ -284,7 +284,8 @@ public:
         
     void set_restriction(bool restriction, glm::vec2 restriction_line[2], bool restriction_direction);
     void set_frustum(const unsigned frust_nr, glm::vec2 camera_point, glm::vec2 restriction_line[2]);
-    void set_test_point(glm::vec2 test_point);
+    void set_test_point(glm::vec2 test_point); 
+	void set_splits_per_frame(const int splits_per_frame);
     void update_and_draw(std::vector<glm::vec2> screen_pos, glm::uvec2 screen_dim);
 
 
@@ -330,13 +331,8 @@ private:
     std::vector<q_node_ptr> check_and_mark_neighbors_for_split(const q_node_ptr n);
     std::vector<q_node_ptr> check_neighbors_for_collapse(const q_node_ptr n) const;
     std::vector<q_node_ptr> check_neighbors_for_restricted(const q_node_ptr n) const;
-    void generate_ideal_tree(const q_tree_ptr src, q_tree_ptr dst);
     void init_tree(q_tree_ptr dst);
-    void copy_tree(q_tree_ptr src, q_tree_ptr dst);
-    void collapse_negative_nodes(q_tree_ptr t);
     void optimize_current_tree(q_tree_ptr src);
-    void optimize_current_tree(q_tree_ptr src, q_tree_ptr dst);
-    void optimize_ideal_tree(q_tree_ptr t);
     
     void update_vbo();
     void update_tree();    
@@ -395,11 +391,7 @@ private:
 
     glm::mat4         m_model;
     glm::mat4         m_model_inverse;
-
-    float m_min_prio;
-    float m_max_prio;
     
-    q_tree_ptr m_tree_ideal;
     q_tree_ptr m_tree_current;
 
     std::vector<QuadtreeRenderer::Vertex> m_cubeVertices;
